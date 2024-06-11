@@ -12,7 +12,9 @@ async function getDropboxAccessToken(refresh_token, access_key, secret_key) {
     }),
   });
 
-  return response.json()["access_token"];
+  const data = await response.json();
+
+  return data["access_token"];
 }
 
 export async function onRequest(context) {
