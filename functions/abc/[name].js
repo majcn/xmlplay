@@ -5,7 +5,7 @@ export async function onRequest(context) {
     {
       method: "POST",
       headers: {
-        "Content-Type": "plain/text",
+        "Content-Type": "text/plain",
         "Authorization": `Bearer ${context.env.ACCESS_TOKEN}`,
         "Dropbox-API-Arg": `{"path": "/${context.params.name}.abc"}`,
       }
