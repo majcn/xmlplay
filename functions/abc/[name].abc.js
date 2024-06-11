@@ -35,5 +35,10 @@ export async function onRequest(context) {
 
   const data = await response.text();
 
-  return new Response(data);
+  return new Response(data, {
+    headers: {
+      "Cache-Control": "public, max-age=86400",
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
 }
