@@ -9,7 +9,7 @@
 'use strict'
 var xmlplay_VERSION = 141;
 
-(function () {
+function xmlplay(Abc) {
     var opt = {
         speed: 1.0,     // initial value of the menu item: speed
         sf2url1: './',  // path to directory containing sound SF2 fonts
@@ -18,6 +18,7 @@ var xmlplay_VERSION = 141;
         midijsUrl1: './',       // path to directory containing sound MIDI-js fonts
         midijsUrl2: 'https://rawgit.com/gleitz/midi-js-soundfonts/gh-pages/FluidR3_GM/'
     }
+    var onReadAbcEvent;
     var gAbcSave, gAbcTxt, allNotes, gBeats, gStaves, nVoices, scoreFnm;
     var iSeq = 0, iSeqStart, isPlaying = 0, timer1, gToSynth = 0, hasSmooth;
     var ntsSeq = [];
@@ -114,7 +115,7 @@ function loginst (s) { logerr (s); cmpDlg.innerHTML += '<div style="white-space:
 
 function readAbcOrXML (abctxt) {
     var xs = abctxt.slice (0, 4000);    // only look at the beginning of the file
-    if (xs.indexOf ('X:') >= 0)      { dolayout (abctxt); return }
+    if (xs.indexOf ('X:') >= 0)      { dolayout (abctxt); onReadAbcEvent(midiVol); return }
     if (xs.indexOf ('<?xml ') == -1) { alert ('not an xml file nor an abc file'); return }
     var p = new window.DOMParser ();
     var xmldata = p.parseFromString (abctxt, "text/xml")
@@ -681,7 +682,7 @@ function putMarkLoc (n, align = true) {
     var p, isvg, x, y, w, h, mark, pn;
     mark = rMarks [n.vce];
     p = n.xy;
-    if (!p) {   // n.xy == undefined
+    if (!p || midiVol[n.vce] == 0) {   // n.xy == undefined
         mark.setAttribute ('width', 0);
         mark.setAttribute ('height', 0);
         return;
@@ -762,11 +763,11 @@ function markeer () {
 function keyDown (e) {
     var key = e.key;
     if (document.activeElement == mbar) {   // mbar heeft de focus
-        if (key == 'Enter' || key == ' ') $('#mbar').click ();  // => menu actief
+        if (key == 'Enter' || key == ' ') document.getElementById("panel-button").click();  // => menu actief
         return;
     }
     if (menu.style.display != 'none') {     // menu is actief
-        if (key == 'Escape') $('#mbar').click ();   // => menu verdwijnt
+        if (key == 'Escape') document.getElementById("panel-button").click();   // => menu verdwijnt
         return;
     }
     if (e.altKey || e.ctrlKey || e.shiftKey || key == 'Tab') return;  // browser shortcuts
@@ -776,7 +777,7 @@ function keyDown (e) {
     case 'ArrowRight': case 'Right': naarMaat (1); break;
     case 'ArrowUp': case 'Up': regelOmhoog (-1); break;
     case 'ArrowDown': case 'Down': regelOmhoog (1); break;
-    case 'm': $('#mbar').click (); break;
+    case 'm': document.getElementById("panel-button").click(); break;
     case 't': cmpDlg.style.display = cmpDlg.style.display == 'none' ? 'block' : 'none'; break;
     case ' ': playBack (); break;
     }
@@ -829,12 +830,14 @@ function playBack () {
     if (!ntsSeq.length) return;
     isPlaying = 1 - isPlaying
     if (isPlaying) {
-        playbtn.value = 'Stop';
+        playbtn.classList.remove('icon-play')
+        playbtn.classList.add('icon-stop')
         playbk.style.display = 'none';
         gAccTime = audioCtx.currentTime * 1000; // starttijd in millisecondes
         markeer ();
     } else {
-        playbtn.value = 'Play';
+        playbtn.classList.remove('icon-stop')
+        playbtn.classList.add('icon-play')
         clearTimeout (timer1);
     }
 }
@@ -1187,41 +1190,29 @@ function laadNoot () {
     cmpDlg.innerHTML = withRT ? 'Loading SF2 fonts<br>' : 'Loading MIDI-js fonts<br>';
     cmpDlg.style.display = 'block';
     if (withRT) {   // load SF2 fonts
-        document.getElementById ('sf2').checked = 'true';
         laadSF2noten (Object.keys (instrs));
     } else {        // load MIDI-js fonts
-        document.getElementById ('midijs').checked = 'true'
         var midiNums = midiUsedArr.filter (function (m) { return !(m in midiLoaded); });
         laadJSNoten (Object.keys (instrs), midiNums);
     }
 }
 
 function getPreload (xmlfnm, p_html, p_url, verder) {
-    var xs = xmlfnm.match (/(.*\/)?([^/]*)$/);  // => [hele uitdrukking, pad, bestand]
-    var pad = './' + (xs [1] ? xs [1] : '');    // relatieve pad naar parameter file t.o.v. plaats xmlplay.html
     var waitElm = document.getElementById ('wait');
     waitElm.style.display = 'block';
-    import (pad + 'parms.js').then (function (mod) {
-        logerr ('parms.js loaded');
-        doParms (p_html, p_url, mod.parms, verder)
-    }).catch (function (err) {
-        if (err.name == 'TypeError') logerr ('no parms.js present');
-        else logerr ('Error in parms.js: ' + err.message);
-        doParms (p_html, p_url, {}, verder);
-    }).finally (() => {
-        var request = new XMLHttpRequest ();
-        request.open ('GET', xmlfnm, true); // type request.response == ??
-        request.onload = function () {
-            logerr ('preload ok');
-            readAbcOrXML (request.response);
-            playbk.style.display = 'block';
-            waitElm.style.display = 'none';
-        }
-        request.onerror = function () {
-            waitElm.innerHTML += '\npreload failed';
-        }
-        request.send();
-    });
+    doParms (p_html, p_url, {}, verder);
+    var request = new XMLHttpRequest ();
+    request.open ('GET', xmlfnm, true); // type request.response == ??
+    request.onload = function () {
+        logerr ('preload ok');
+        readAbcOrXML (request.response);
+        playbk.style.display = 'block';
+        waitElm.style.display = 'none';
+    }
+    request.onerror = function () {
+        waitElm.innerHTML += '\npreload failed';
+    }
+    request.send();
 }
 
 function doParms (p_html, p_url, p_mod, verder) {
@@ -1377,15 +1368,6 @@ function dropuse () {
     }
 }
 
-function setFullscreen () {
-    var e = document.body;
-    var fscrAan = e.requestFullscreen || e.mozRequestFullScreen || e.webkitRequestFullscreen;
-    var fscrUit = document.exitFullscreen || document.mozCancelFullScreen || document.webkitExitFullscreen;
-    if (!fscrAan || !fscrUit) return;
-    if ($('#fscr').prop ('checked')) fscrAan.call (e);
-    else fscrUit.call (document);
-}
-
 function setMidiVol (v, i) {
     midiVol [i] = 1 * v.value;
     v.parentElement.querySelector ('div').innerHTML = v.value;
@@ -1404,20 +1386,19 @@ function setMidiInst (v, i) {
     laadNoot ();    // laad nieuw instrument inst
 }
 
-document.addEventListener ('DOMContentLoaded', async function () {
+async function init(parms) {
+    onReadAbcEvent = parms["x-onSongLoad"];
     cmpDlg = document.getElementById ('comp');
     abcElm = document.getElementById ('notation');
     errElm = document.getElementById ('err');
     rolElm = document.getElementById ('rollijn');
     abcfile = document.getElementById ('abcfile');
     fknElm = document.getElementById ('fknp');
-    tmpElm = document.getElementById ('tempo');
+    tmpElm = document.getElementById ('speed-input');
     playbk = document.getElementById ('playbk');
     playbtn = document.getElementById ('play');
     addUnlockListener (playbtn, 'click', playBack);
     addUnlockListener (playbk, 'click', playBack);
-    fknElm.addEventListener ('change', readLocalFile);
-    document.getElementById ('save').addEventListener ('click', saveLayout);
     rolElm.addEventListener ('mousedown', lijn_shift);
     rolElm.addEventListener ('touchstart', lijn_shift);
     window.addEventListener ('resize', function () {
@@ -1425,36 +1406,24 @@ document.addEventListener ('DOMContentLoaded', async function () {
         resizeNotation ();
         alignSystem ();
     });
-    // drag drop
-    abcElm.addEventListener ('drop', doDrop);
-    abcElm.addEventListener ('dragover', function (e) {   // this handler makes the element accept drops and generate drop-events
-        e.stopPropagation ();
-        e.preventDefault ();                        // the preventDefault is obligatory for drag/drop!
-        e.dataTransfer.dropEffect = 'copy';         // Explicitly show this is a copy.
-    });
-    abcElm.addEventListener ('dragenter', function () { this.classList.add ('indrag'); });
-    abcElm.addEventListener ('dragleave', function () { this.classList.remove ('indrag'); });
-    // dropbox
-    drpuse = document.getElementById ('drpuse');
-    drpuse.checked = false;
-    drpuse.addEventListener ('click', dropuse);
-    drplbl = document.getElementById ('drplbl');
     // menu
     mbar = document.getElementById ('mbar');
     menu = document.getElementById ('menu');
     menu.style.display = 'none';
-    mbar.addEventListener ('click', function (ev) {
+    document.getElementById("panel-button").addEventListener ('click', function (ev) {
         ev.stopPropagation ();
         var hidden = menu.style.display == 'none';
         menu.style.display = hidden ? 'flex' : 'none';
         mbar.style.background = hidden ? '#aaa' : '';
-        if (hidden) $('#play').focus ();    // menu is zichtbaar !
+        if (hidden) document.getElementById('play').focus();    // menu is zichtbaar !
     });
     menu.addEventListener ('click', function (ev) {
         ev.stopPropagation ();  // anders krijgt notation/body/svg ook de click
     });
     hasSmooth = CSS.supports ('scroll-behavior', 'smooth');
-    await parsePreload ();  // wacht tot parameters toegekend zijn
+    await new Promise (function (verder) {
+      getPreload(parms["x-songUrl"], parms, {}, verder)
+    });
     resizeNotation ();
     var ac = window.AudioContext || window.webkitAudioContext;
     audioCtx = ac != undefined ? new ac () : null;
@@ -1479,18 +1448,10 @@ document.addEventListener ('DOMContentLoaded', async function () {
         }
     }
     if (m.length > 1) alert (m.join ('\n'));
-    document.getElementById ('verlab').innerHTML = '<span>Version:</span>' + xmlplay_VERSION;
-    $('#fscr').on ('change', setFullscreen);
-    $('body').on ('fullscreenchange webkitfullscreenchange mozfullscreenchange', function () {
-        var e = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
-        $('#fscr').prop ('checked', e != null);
-    });
     document.body.addEventListener ('keydown', keyDown);
-    document.body.addEventListener ('click', evt => {
-        if (menu.style.display != 'none') $('#mbar').click ()   // sluit menu
-    });
-    document.getElementById ('midijs').addEventListener ('click', evt => { withRT = 0; laadNoot (); });
-    document.getElementById ('sf2').addEventListener ('click', evt => { withRT = 1; laadNoot (); });
-});
+}
 
-})();
+return { init }
+}
+
+export default xmlplay;
