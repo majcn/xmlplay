@@ -1,7 +1,7 @@
 import "./style.css";
 
 import abc2svg from "./vendor/abc2svg/abc2svg-1.js";
-import xmlplay from "./src/xmlplay/xmlplay.js";
+import xmlplay from "./xmlplay.js";
 
 const player = xmlplay(abc2svg.Abc);
 
