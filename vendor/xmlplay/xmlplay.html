@@ -6,36 +6,15 @@
 <script src="jquery-3.3.1.slim.min.js"></script>
 <script src="abc2svg-1.js"></script>
 <script src="xml2abc.js"></script>
-<script src="full_source/xmlplay.js"></script>
+<script src="xmlplay.js"></script>
 <style>
-.linethrough {
-  text-decoration: line-through;
-}
-.strikethrough {
-  position: relative;
-}
-.strikethrough:before {
-  position: absolute;
-  content: "";
-  left: 0;
-  top: 50%;
-  right: 0;
-  border-top: 1px solid;
-  border-color: inherit;
-
-  -webkit-transform:rotate(-15deg);
-  -moz-transform:rotate(-15deg);
-  -ms-transform:rotate(-15deg);
-  -o-transform:rotate(-15deg);
-  transform:rotate(-15deg);
-}
 .rat { width: 100%; height:100%; margin:0px; overflow: auto; }
 body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; -webkit-touch-callout: none; }
 html, body { background: white; }   /* for full screen */
-label, input, select, #mbar, #voice-1, #voice-2, #voice-3, #voice-4 #schuivers { font-family: arial; font-size: 15px; }
+label, input, select, #mbar, #schuivers { font-family: arial; font-size: 15px; }
 #btns     { position: absolute; right: 4px; top: 4px; z-index:3; }
-#mbar, #voice-1, #voice-2, #voice-3, #voice-4 { padding: 10px 4px 10px 4px; text-align: right; background-color: #eee; }
-#mbar:hover, #voice-1:hover, #voice-2:hover, #voice-3:hover, #voice-4:hover, #playbk:hover { cursor: pointer; }
+#mbar     { padding: 10px 4px 10px 4px; text-align: right; background-color: #eee; }
+#mbar:hover, #playbk:hover { cursor: pointer; }
 #menu     { background-color: #eee; padding-left: 5px; padding-right: 5px; padding-bottom: 5px;
             flex-direction: column; }
 #menu label { display:block; margin-bottom: 8px; }
@@ -86,12 +65,6 @@ input[type="range"] { writing-mode: vertical-lr; }
         </div>
         <div class="rij" id="schuivers"></div>
     </form>
-    <div class="rij" style="background: #eee;">
-    <div id="voice-1" tabindex="1" class="strikethrough">♩ 1</div>
-    <div id="voice-2" tabindex="2" class="linethrough">♩ 2</div>
-    <div id="voice-3" tabindex="3">♩ 3</div>
-    <div id="voice-4" tabindex="4">♩ 4</div>
-    </div>
 </span>
 <datalist id="markers">
   <option value="0"></option>
