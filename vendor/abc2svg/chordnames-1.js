@@ -49,6 +49,10 @@ abc2svg.chordnames = {
 				t = 'N'
 			gch.text = t.replace(cfmt.chordnames.re,
 				function(c){return cfmt.chordnames.o[c]})
+
+			if (gch.text.endsWith("m")) {
+				gch.text = gch.text.substring(0, gch.text.length - 1).toLowerCase()
+			}
 		}
 	}
 	of(s)
@@ -60,6 +64,13 @@ abc2svg.chordnames = {
 	re = [],
 	o = {},
 	cfmt = this.cfmt()
+
+	if (!cfmt.chordnames) {
+		cfmt.chordnames = {
+			o: {'Bb': 'B', 'B': 'H', 'b': 'es', '#': 'is'},
+			re: /Bb|B|b|#/g
+		}
+	}
 
 	if (cmd == "chordnames") {
 		parm = parm.split(',')
