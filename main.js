@@ -3,7 +3,7 @@ import "./style.css";
 import abc2svg from "./vendor/abc2svg/abc2svg-1.js";
 import xmlplay from "./xmlplay.js";
 
-const player = xmlplay(abc2svg.Abc);
+const player = xmlplay(abc2svg);
 
 function initSpeedRangeElement() {
   const speedRangeValue = document.getElementById("speed-input-value");
