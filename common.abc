@@ -1,10 +1,5 @@
 %%measurenb 0
-%%ps /gcshow { 1 0 0 setrgbcolor show 0 0 0 setrgbcolor } !
-%%gchordbox 1
 %%beginsvg
 <style>.red {color:red;fill:red;}</style>
 %%endsvg
 %%gchordfont sans-serifBoldItalic 16 class=red
-%%rightmargin 0.8cm
-%%leftmargin 0.8cm
-%%footer $IZ
