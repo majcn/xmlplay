@@ -3,6 +3,8 @@ import "./style.css";
 import abc2svg from "./vendor/abc2svg/abc2svg-1.js";
 import xmlplay from "./xmlplay.js";
 
+import commonAbc from "./common.abc?raw"
+
 const player = xmlplay(abc2svg);
 
 function initSpeedRangeElement() {
@@ -54,6 +56,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   await player.init({
     "x-songUrl": `abc/${getSongName()}.abc`,
     "x-onSongLoad": addVoiceButtons,
+    "x-commonAbc": commonAbc,
     sf2url1: "./jssf_files/",
     sf2url2: "https://wim.vree.org/js3/jssf_files/",
     noErr: true,

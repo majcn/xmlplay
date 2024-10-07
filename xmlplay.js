@@ -18,7 +18,7 @@ function xmlplay(Abc) {
         midijsUrl1: './',       // path to directory containing sound MIDI-js fonts
         midijsUrl2: 'https://rawgit.com/gleitz/midi-js-soundfonts/gh-pages/FluidR3_GM/'
     }
-    var onReadAbcEvent;
+    var onReadAbcEvent, commonAbc;
     var gAbcSave, gAbcTxt, allNotes, gBeats, gStaves, nVoices, scoreFnm;
     var iSeq = 0, iSeqStart, isPlaying = 0, timer1, gToSynth = 0, hasSmooth;
     var ntsSeq = [];
@@ -114,6 +114,7 @@ function logcmp (s) { logerr (s); cmpDlg.innerHTML += s + '<br>'}
 function loginst (s) { logerr (s); cmpDlg.innerHTML += '<div style="white-space: nowrap">' + s + '</div>'}
 
 function readAbcOrXML (abctxt) {
+    abctxt = commonAbc + abctxt;
     var xs = abctxt.slice (0, 4000);    // only look at the beginning of the file
     if (xs.indexOf ('X:') >= 0)      { dolayout (abctxt); onReadAbcEvent(midiVol); return }
     if (xs.indexOf ('<?xml ') == -1) { alert ('not an xml file nor an abc file'); return }
@@ -1388,6 +1389,7 @@ function setMidiInst (v, i) {
 
 async function init(parms) {
     onReadAbcEvent = parms["x-onSongLoad"];
+    commonAbc = parms["x-commonAbc"];
     cmpDlg = document.getElementById ('comp');
     abcElm = document.getElementById ('notation');
     errElm = document.getElementById ('err');
