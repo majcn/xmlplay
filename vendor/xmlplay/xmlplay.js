@@ -1,4 +1,4 @@
-//~ Revision: 141, Copyright (C) 2016-2024: Willem Vree, contributions Stéphane David.
+//~ Revision: 159, Copyright (C) 2016-2025: Willem Vree, contributions Stéphane David.
 //~ This program is free software; you can redistribute it and/or modify it under the terms of the
 //~ GNU General Public License as published by the Free Software Foundation; either version 2 of
 //~ the License, or (at your option) any later version.
@@ -7,7 +7,7 @@
 //~ See the GNU General Public License for more details. <http://www.gnu.org/licenses/gpl.html>.
 
 'use strict'
-var xmlplay_VERSION = 141;
+var xmlplay_VERSION = 159;
 
 (function () {
     var opt = {
@@ -16,7 +16,10 @@ var xmlplay_VERSION = 141;
         sf2url2: '',    // fall back path
         instTab: {},    // { instrument number -> instrument name } for non standard instrument names
         midijsUrl1: './',       // path to directory containing sound MIDI-js fonts
-        midijsUrl2: 'https://rawgit.com/gleitz/midi-js-soundfonts/gh-pages/FluidR3_GM/'
+        midijsUrl2: 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/',
+        instList: {},   // {voice number: instrument number} (override %%MIDI)
+        transMap: {},   // stem nummer -> transpositie
+        burak: 0        // ornamenten specifiek voor burak
     }
     var gAbcSave, gAbcTxt, allNotes, gBeats, gStaves, nVoices, scoreFnm;
     var iSeq = 0, iSeqStart, isPlaying = 0, timer1, gToSynth = 0, hasSmooth;
@@ -89,6 +92,7 @@ var xmlplay_VERSION = 141;
     var hasPan = 1, hasLFO = 1, hasFlt = 1, hasVCF = 1; // web audio api support
     var gAccTime;       // som van de ABC tijden in millisecondes (plus de starttijd)
     var instMap;        // midi-instrument => midi-instrument voor dynamische klankverandering
+    var debug = 0;      // print debug messages
 
 const schuifregelaar = `<div class="schuif">
     <div class="rij">
@@ -107,6 +111,14 @@ const schuifregelaar = `<div class="schuif">
     <div class="instnum">Inst <input type=number value="22"></div>
 </div>
 `
+const svg36 = ['%%beginsvg','<defs>',
+'<text id="acc1_3" x="-1">&#xe261; <tspan x="-6" y="-4" style="font-size:14px">&#8593;</tspan></text>',
+'<text id="acc2_3" x="-1">&#xe262; <tspan x="-5" y="14" style="font-size:14px">&#8595;</tspan></text>',
+'<text id="acc4_3" x="-1">&#xe262; <tspan x="-5" y="-4" style="font-size:14px">&#8593;</tspan></text>',
+'<text id="acc-4_3" x="-2">&#xe260; <tspan x="-8.2" y="9" style="font-size:16px">&#8595;</tspan></text>',
+'<text id="acc-2_3" x="-1">&#xe260; <tspan x="-7.3" y="-1" style="font-size:16px">&#8593;</tspan></text>',
+'<text id="acc-1_3" x="-1">&#xe261; <tspan x="-2" y="12" style="font-size:14px">&#8595;</tspan></text>',
+'</defs>','%%endsvg'].join ('\n')
 
 function logerr (s) { errElm.innerHTML += s + '\n'; }
 function logcmp (s) { logerr (s); cmpDlg.innerHTML += s + '<br>'}
@@ -121,6 +133,7 @@ function readAbcOrXML (abctxt) {
     var options = { p:'f', t:1, u:0, v:3, m:2, mnum:0 };    // t==1 -> tab en perc naar %%map
     if (noPF) options.p = '';
     if (noLB) options.x = 1;
+    if (opt.rbm) options.rbm = 1;
     var res = vertaal (xmldata, options);
     if (res[1]) logerr (res[1]);
     dolayout (res[0]);
@@ -187,19 +200,23 @@ function dolayout (abctxt) {
         return [tuning, diafret];
     }
     function mapPerc (abcIn) {
-        var ls, i, x, r, mapName, note, midi, mtab = {};
+        var ls, i, x, r, r2, mapName, note, midi, mtab = {}, voiceMapNames = {};
         ls = abcIn.split ('\n');
         for (i = 0; i < ls.length; ++i) {
             x = ls [i];
             if (x.indexOf ('%%map') >= 0) {
                 r = x.match(/%%map *(\S+) *(\S+).*midi=(\d+)/)
-                if (r) {
+                r2 = x.match(/%%map *(\S+) /)
+                if (r) {            // map name for percussion
                     mapName = r[1]; note = r[2]; midi = r[3];
                     mtab [mapName + note] = parseInt (midi);
+                } else if (r2) {    // map name for tablature
+                    mapName = r2[1]
+                    voiceMapNames [mapName] = 1;
                 }
             }
         }
-        return mtab;
+        return [voiceMapNames, mtab];   // tablature map names, percussion map names
     }
     var percSvg = ['%%beginsvg\n<defs>',
         '<text id="x" x="-3" y="0">&#xe263;</text>',
@@ -264,14 +281,22 @@ function dolayout (abctxt) {
         return abc.join ('\n');
     }
     if (abctxt.indexOf ('I:percmap') >= 0) abctxt = perc2map (abctxt);
-    if (abctxt.indexOf ('%%map') >= 0) mapTab = mapPerc (abctxt);
+    var voiceMapNames;
+    if (abctxt.indexOf ('%%map') >= 0) [voiceMapNames, mapTab] = mapPerc (abctxt);
+    if (abctxt.includes ('temperamentequal')) abctxt = svg36 + '\n' + abctxt;
     if (abctxt.indexOf (' strings') >= 0) {
         var tns = stringTunings (abctxt);
         gTunings = tns [0];
         gDiafret = tns [1];
     }
     gAbcSave = abctxt;  // bewaar abc met wijzigingen
-    doModel (abctxt);
+    var abctxtTemp = abctxt;
+    for (var vmapnm in voiceMapNames) {     // disable the voicemaps for tablature
+        var nm1 = '%%voicemap ' + vmapnm;   // to get correct fractional midi numbers
+        var nm2 = nm1.replace ('%voicemap', '_________')
+        abctxtTemp = abctxtTemp.replaceAll (nm1, nm2)
+    }
+    doModel (abctxtTemp);   // only disable maps during model parsing
     doLayout (abctxt);
     var ss = document.getElementById ('schuivers');
     ss.replaceChildren ();  // verwijder de oude schuifregelaars
@@ -315,6 +340,7 @@ function doModel (abctxt) {
     midiVol = [];       // volume for each voice from midi controller 7
     midiPan = [];       // panning for each voice from midi controller 10
     midiInstr = [];     // instrument for each voice from midi program
+    var edo53 = 0;      // tuning: equal division of octave by 53
 
     function getStaves (voice_tb) {
         var xs = [];
@@ -330,6 +356,7 @@ function doModel (abctxt) {
             midiPan [i] = v.midictl && v.midictl [10];
             if (midiPan [i] == undefined) midiPan [i] = 64;
             midiInstr [i] = v.instr ? v.instr : 0;
+            if (i in opt.instList) midiInstr [i] = opt.instList [i];    // url-parameter gaat voor
             vce2stf [i] = v.st;
             if (!stf2name [v.st]) { stf2name [v.st] = v.nm || ''; }
         });
@@ -341,26 +368,54 @@ function doModel (abctxt) {
     }
 
     function parseModel (ts_p, voice_tb, music_types) {
-        function setKey (v, sharpness) {    // voice, index in cycle of fifth (keySteps)
-            acctab [v] = [0,0,0,0,0,0,0];   // step modifications for the current key in voice v
-            alts [v] = {};                  // reset alterations
-            curKey [v] = sharpness;
-            var sign = sharpness >= 0;
-            var accs = sign ? keySteps.slice (0, sharpness) : keySteps.slice (sharpness);   // steps modified by key
-            accs.forEach (function (iacc) { acctab [v][iacc] += sign ? 1 : -1; });          // perform modification in acctab
+        function edo53cor (step) {
+            var semi = [0, 2, 3, 5, 7, 8, 10];      // toonladder Amin (halve toonschreden)
+            var komma = [0, 9, 13, 22, 31, 35, 44]; // idem, maar toonschreden in komma's t.o.v. A
+            var i = (step + 2) % 7;                 // step == 0 => semi [3] == C
+            return komma [i] * 12 / 53 - semi [i];
+        }
+        function setKey (v, keyrec) {       // voice, ABC key record
+            var a, p, oct, step, sign, stappen, acctmp = {};
+            var [sharp, flat] = edo53 ? [48/53, -60/53] : [1, -1];
+            if (keyrec.extra) keyrec = curKey [v];  // reset sleutel na een voorslag
+            var sharpness = keyrec.k_sf;    // index in cycle of fifth (keySteps)
+            var keyaccs = keyrec.k_a_acc;   // array of accidentals
+            acctmp [v] = [0,0,0,0,0,0,0];   // step modifications for the current key in voice v
+            curKey [v] = keyrec;            // onthoud het hele keyrecord
+            sign = sharpness >= 0;
+            stappen = sign ? keySteps.slice (0, sharpness) : keySteps.slice (sharpness);   // steps modified by key
+            for (step of stappen) { acctmp [v][step] = sign ? sharp : flat; }
+            if (keyaccs) {
+                for (a of keyaccs) {        // { acc: <int | [num, den]>, pit: ladderstap }
+                    p = a.pit + 19          // C -> 5 * 7 = 35
+                    step = p % 7;           // C -> 0
+                    if (Number.isInteger (a.acc)) {
+                        acctmp [v][step] = a.acc;
+                    } else {
+                        var [an, ad] = a.acc;
+                        acctmp [v][step] = an / ad;
+                    }
+                }
+            }
+            acctab [v] = [];
+            for (var o = 0; o < 9; ++o) {   // vul acctab voor 9 octaven
+                acctab [v] = acctab [v].concat (acctmp [v]);
+            }
         }
         function checkDecos (ts) {
+            var has_orn = '';
             if (ts.a_dd) {
-                ts.a_dd.forEach (function (r) { // check all deco's
+                for (var r of ts.a_dd) { // check all deco's
                     var vol = dyntab [r.name];  // volume of deco (if defined)
                     if (vol) {          // set all voices of staff to volume
                         gStaves [ts.st].forEach (function (vce) {
                             vceVol [vce] = vol; // array of current volumes
                         });
                     }
+                    if (ornaments.includes (r.name)) has_orn = r.name;
                     if (r.name == 'swing') swingOn = 1;
                     if (r.name == 'swingoff') swingOn = 0;
-                });
+                };
             }
             if (ts.a_gch) {
                 ts.a_gch.forEach (function (t) { // check all text annotations
@@ -375,121 +430,170 @@ function doModel (abctxt) {
                 nt.time += 64;  // volgende noot evenveel later
                 nt.dur -= 64;   // volgende noot evenveel korter
             }
+            return has_orn;     // naam van de versiering als aanwezig
         }
-        var acctab = {}, accTrans = {'-2':-2,'-1':-1,0:0,1:1,2:2,3:0}, alts = {}, curKey = {}, tied = {};
+        function noot2mid (n, p, v) {
+            var mnf, mn, cent, oct, step;
+            if (gTrans [v]) p += gTrans [v];    // octaaf transpositie in sleutel
+            if (n.acc != undefined && n.acc != 0) {
+                if (Number.isInteger (n.acc)) {
+                    acctab [v][p] = accTrans [n.acc];   // acctab wordt aan het eind van de maat gereset
+                } else {
+                    var [an, ad] = n.acc;
+                    acctab [v][p] = an / ad;
+                }
+            }
+            oct = Math.floor (p / 7);   // C -> 5
+            step = p % 7;               // C -> 0
+            mnf = oct * 12 + scaleSteps [step];
+            if (edo53) mnf += edo53cor (step);   // makam rast scale
+            mnf += acctab [v][p];       // temporary alterations, key-accidentals
+            mn = Math.round (mnf)
+            cent = 100 * (mnf - mn)
+            return [mn, cent]
+        }
+        function compute_ornament (has_orn, n, p, v) {
+            var nootop = noot2mid (n, p + 1, v)
+            var nootneer = noot2mid (n, p - 1, v)
+            return { naam: has_orn, nop: nootop, nnr: nootneer }
+        }
+        function voegVslg (voorslag, tijd, duur, deNoten) {
+            var dvm = duur / (voorslag.ns.length + 1);  // max duur van iedere voorslagnoot
+            if (opt.burak) voorslag.accia = true;
+            if (voorslag.accia && dvm > 96) dvm = 96;   // 1/16
+            for (var nv of voorslag.ns) {
+                nv.t = tijd;
+                deNoten.push (nv);
+                var dv = nv.ns [0].dur;
+                if (dv > dvm) {         // beperk duur voorslagakkoord
+                    dv = dvm; 
+                    for (var nx of nv.ns) nx.dur = dvm;
+                }
+                tijd += dv;
+                duur -= dv;
+            }
+            return [tijd, duur]
+        }
+        function parseNotes (ts_p, nextsel = 'ts_next') {
+            var deNoten = [];
+            for (var ts = ts_p; ts; ts = ts [nextsel]) {
+                var i, n, p, oct, step, mn, cent, mnf, noten = [], noot, fret, tuning, v, vid, nt, x;
+                switch (ts.type) {
+                case TEMPO:
+                    var dtmp = ts.tempo_notes;
+                    if (!dtmp) {                    // use the old Q:80 notation for a hidden tempo marking
+                        var ttxt = abctxt.slice (ts.istart, ts.iend)    // get the abc tempo text
+                        ttxt = ttxt.match (/\d+/)   // extract the number
+                        if (ttxt) gTempo = 1 * ttxt [0]
+                    } else {
+                        dtmp = ts.tempo_notes.reduce (function (sum, x) { return sum + x; });
+                        gTempo = ts.tempo * dtmp / 384;
+                    }
+                    break;
+                case REST:
+                    checkDecos (ts);
+                    noot = { t: ts.time, mnum: -1, dur: ts.dur };
+                    noten.push (noot);
+                    deNoten.push ({ t: ts.time, ix: ts.istart, v: ts.v, ns: noten, inv: ts.invis, tmp: gTempo });
+                    break;
+                case NOTE:
+                    var instr = midiInstr [ts.v];   // from %%MIDI program instr
+                    if (ts.p_v.clef.clef_type == 'p') instr += 128;  // percussion
+                    var has_orn = checkDecos (ts);
+                    var tijd = ts.time; 
+                    var duur = ts.dur;
+                    if (voorslag.ns) [tijd, duur] = voegVslg (voorslag, tijd, duur, deNoten);
+                    for (i = 0; i < ts.notes.length; ++i) { // parse all notes (chords)
+                        n = ts.notes [i];
+                        p = n.pit + 19;             // C -> 35 == 5 * 7, global step
+                        v = ts.v;                   // voice number 0..
+                        vid = ts.p_v.id;            // voice ID
+                        vol = vceVol [v] || 60;     // 60 == !p! if no volume
+                        var ornmnt = has_orn ? compute_ornament (has_orn, n, p, v) : {};
+                        [mn, cent] = noot2mid (n, p, v);
+                        //~ if (n.midi) mn = n.midi;     // ABC toonhoogte
+                        if (debug) {
+                            mnf = mn + cent / 100
+                            x = Math.round (mnf * 53 / 12 + 0.25)   // comm53 value
+                            console.log (x, mnf, n.midi);
+                        }
+                        var mapNm = ts.p_v.map;
+                        if (instr >= 128 && mapNm != 'MIDIdrum') {
+                            nt = abctxt.substring (ts.istart, ts.iend);
+                            nt = nt.match (/[=_^]*[A-Ga-g]/)[0];
+                            x = mapTab [mapNm + nt];
+                            if (x) mn = x;
+                        }
+                        var mnused = instr * 128 + mn;
+                        midiUsed [mnused] = 1;      // collect all used midinumbers
+
+                        noot = { t: tijd, inst: instr, mnum: mn, cnt: cent, dur: duur, velo: vol, orn: ornmnt };
+                        if (p in tied [v]) {
+                            nt = tied [v][p];   // de bindende noot
+                            if (tijd == nt.t + nt.dur) {
+                                nt.dur += duur;   // verleng duur van bindende noot
+                                if (!n.tie_ty) delete tied [v][p]; // geen verdere ties
+                                noot.mnum = -1;     // noot alleen behandelen als rust
+                            } else {
+                                console.log ('wrong tie: ', v, nt.mnum % 127, nt.t / 384, nt.dur);
+                                delete tied [v][p]; // binding van oude noot klopt niet
+                                if (n.tie_ty) tied [v][p] = noot; // bewaar referentie nieuwe noot
+                            }
+                        } else if (n.tie_ty) {
+                            tied [v][p] = noot; // bewaar referentie om later de duur te verlengen
+                        }
+                        noten.push (noot);
+                    }
+                    if (noten.length == 0) break;           // door ties geen noten meer over
+                    deNoten.push ({ t: tijd, ix: ts.istart, v: ts.v, ns: noten, stf: ts.st, tmp: gTempo });
+                    voorslag = {};
+                    break;
+                case GRACE:
+                    var noten = parseNotes (ts.extra, 'next');
+                    voorslag.ns = noten;    // directe toekenning aan voorslag.ns werkt niet ?????
+                    voorslag.accia = ts.sappo
+                    break;
+                case KEY: setKey (ts.v, ts); break;         // set acctab to new key
+                case BAR:
+                    setKey (ts.v, curKey [ts.v]);           // reset acctab to current key
+                    deNoten.push ({ t: ts.time, ix: ts.istart, v: ts.v, bt: ts.bar_type, tx: ts.text });
+                    break;
+                case METER:                         // ritme verandering: nog te doen !
+                    //~ gBeats = parseInt (ts.a_meter [0].top);
+                    break;
+                case BLOCK:
+                    if (ts.instr) midiInstr [ts.v] = ts.instr;
+                    if (ts.ctrl == 7) midiVol [ts.v] = ts.val;
+                    if (ts.ctrl == 10) midiPan [ts.v] = ts.val;
+                    if (ts.v in opt.instList && ts.time == 0) { // url-parameter gaat voor, maar alleen aan het begin
+                        midiInstr [ts.v] = opt.instList [ts.v];
+                    }
+                    if (ts.ctrl == 9) edo53 = ts.val == 53;
+                }
+            }
+            return deNoten
+        }
+        const ornaments = ['trill','lowermordent','uppermordent','//'];
+        var acctab = {}, curKey = {}, tied = {}, voorslag = {};
+        var accTrans = {'-2':-2, '-1':-1, 0:0, 1:1, 2:2, 3:0};
         var diamap = '0,1-,1,1+,2,3,3,4,4,5,6,6+,7,8-,8,8+,9,10,10,11,11,12,13,13+,14'.split (',')
         var dyntab = {'ppp':30, 'pp':45, 'p':60, 'mp':75, 'mf':90, 'f':105, 'ff':120, 'fff':127}
         var vceVol = [], vol;
         var mtr = voice_tb [0].meter.a_meter;
         gBeats = mtr.length ? parseInt (mtr [0].top) : 4;
-        for (v = 0; v < voice_tb.length; ++v) {
-            var key = voice_tb [v].key.k_sf;
+        for (var v = 0; v < voice_tb.length; ++v) {
+            var key = voice_tb [v].key;
             setKey (v, key);
             tied [v] = {};
         }
         var midiUsed = {};
         nVoices = voice_tb.length;
         gStaves = getStaves (voice_tb);
-        for (var ts = ts_p; ts; ts = ts.ts_next) {
-            var i, n, p, oct, step, mn, noten = [], noot, fret, tuning, v, vid, nt, x;
-            switch (ts.type) {
-            case TEMPO:
-                var dtmp = ts.tempo_notes;
-                if (!dtmp) {                    // use the old Q:80 notation for a hidden tempo marking
-                    var ttxt = abctxt.slice (ts.istart, ts.iend)    // get the abc tempo text
-                    ttxt = ttxt.match (/\d+/)   // extract the number
-                    if (ttxt) gTempo = 1 * ttxt [0]
-                } else {
-                    dtmp = ts.tempo_notes.reduce (function (sum, x) { return sum + x; });
-                    gTempo = ts.tempo * dtmp / 384;
-                }
-                break;
-            case REST:
-                checkDecos (ts);
-                noot = { t: ts.time, mnum: -1, dur: ts.dur };
-                noten.push (noot);
-                allNotes.push ({ t: ts.time, ix: ts.istart, v: ts.v, ns: noten, inv: ts.invis, tmp: gTempo });
-                break;
-            case NOTE:
-                var instr = midiInstr [ts.v];   // from %%MIDI program instr
-                if (ts.p_v.clef.clef_type == 'p') instr += 128;  // percussion
-                checkDecos (ts);
-                for (i = 0; i < ts.notes.length; ++i) { // parse all notes (chords)
-                    n = ts.notes [i];
-                    p = n.pit + 19;             // C -> 35 == 5 * 7, global step
-                    v = ts.v;                   // voice number 0..
-                    vid = ts.p_v.id;            // voice ID
-                    vol = vceVol [v] || 60;     // 60 == !p! if no volume
-                    if (gTrans [v]) p += gTrans [v];    // octaaf transpositie in sleutel
-                    oct = Math.floor (p / 7);   // C -> 5
-                    step = p % 7;               // C -> 0
-                    if (n.acc != undefined) alts [v][p] = accTrans [n.acc]; // wijzig acctab voor stap p in stem ts.v
-                    mn = oct * 12 + scaleSteps [step] + (p in alts [v] ? alts [v][p] : acctab [v][step]);
-                    var mapNm = ts.p_v.map;
-                    if (n.midi) mn = n.midi;     // ABC toonhoogte
-                    if (instr >= 128 && mapNm != 'MIDIdrum') {
-                        nt = abctxt.substring (ts.istart, ts.iend);
-                        nt = nt.match (/[=_^]*[A-Ga-g]/)[0];
-                        x = mapTab [mapNm + nt];
-                        if (x) mn = x;
-                    }
-                    mn = instr * 128 + mn;
-                    midiUsed [mn] = 1;          // collect all used midinumbers
-
-                    noot = { t: ts.time, mnum: mn, dur: ts.dur, velo: vol };
-                    if (p in tied [v]) {
-                        nt = tied [v][p];   // de bindende noot
-                        if (ts.time == nt.t + nt.dur) {
-                            nt.dur += ts.dur;   // verleng duur van bindende noot
-                            if (!n.tie_ty) delete tied [v][p]; // geen verdere ties
-                            noot.mnum = -1;     // noot alleen behandelen als rust
-                        } else {
-                            console.log ('wrong tie: ', v, nt.mnum % 127, nt.t / 384, nt.dur);
-                            delete tied [v][p]; // binding van oude noot klopt niet
-                            if (n.tie_ty) tied [v][p] = noot; // bewaar referentie nieuwe noot
-                        }
-                    } else if (n.tie_ty) {
-                        tied [v][p] = noot; // bewaar referentie om later de duur te verlengen
-                    }
-                    noten.push (noot);
-                }
-                if (noten.length == 0) break;           // door ties geen noten meer over
-                allNotes.push ({ t: ts.time, ix: ts.istart, v: ts.v, ns: noten, stf: ts.st, tmp: gTempo });
-                break;
-            case KEY: setKey (ts.v, ts.k_sf); break;    // set acctab to new key
-            case BAR:
-                setKey (ts.v, curKey [ts.v]);           // reset acctab to current key
-                allNotes.push ({ t: ts.time, ix: ts.istart, v: ts.v, bt: ts.bar_type, tx: ts.text });
-                break;
-            case METER:                         // ritme verandering: nog te doen !
-                //~ gBeats = parseInt (ts.a_meter [0].top);
-                break;
-            case BLOCK:
-                if (ts.instr) midiInstr [ts.v] = ts.instr;
-                if (ts.ctrl == 7) midiVol [ts.v] = ts.val;
-                if (ts.ctrl == 10) midiPan [ts.v] = ts.val;
-            }
-        }
-        rMarks.forEach (function (mark) {   // verwijder oude markeringen
-            var pn = mark.parentNode;
-            if (pn) pn.removeChild (mark);
-        });
-        isvgPrev = [];                      // clear svg indexes
-        var kleur = ['#f9f','#3cf','#c99','#f66','#fc0','#cc0','#ccc'];
-        for (var i = 0; i < nVoices; ++i) { // a marker for each voice
-            var alpha = 1 << i & gCurMask ? '0' : ''
-            var rMark = document.createElementNS ('http://www.w3.org/2000/svg','rect');
-            rMark.setAttribute ('fill', kleur [i % kleur.length] + alpha);
-            rMark.setAttribute ('fill-opacity', '0.5');
-            rMark.setAttribute ('width', '0');  // omdat <rect> geen standaard HTML element is werkt rMark.width = 0 niet.
-            rMarks.push (rMark);
-            isvgPrev.push (-1);
-        }
+        allNotes = parseNotes (ts_p);
         midiUsedArr = Object.keys (midiUsed);   // global used in laadNoot
-        if (audioCtx != null) laadNoot ();  // laad de golfdata van de benodigde midinummers
-        else alert (alrtMsg2);
     }
 
+    if (abctxt.indexOf ('temperamentequal 53') >= 0) edo53 = 1;
     var user = {
         'img_out': null, // img_out,
         'errmsg': errmsg,
@@ -502,6 +606,22 @@ function doModel (abctxt) {
     abc2svg.tosvg ('abc2svg', abctxt);
     if (errtxt == '') errtxt = 'no error';
     logerr (errtxt.trim ());
+    rMarks.forEach (function (mark) {   // verwijder oude markeringen
+        var pn = mark.parentNode;
+        if (pn) pn.removeChild (mark);
+    });
+    isvgPrev = [];                      // clear svg indexes
+    var kleur = ['#f9f','#3cf','#c99','#f66','#fc0','#cc0','#ccc'];
+    for (var i = 0; i < nVoices; ++i) { // a marker for each voice
+        var alpha = 1 << i & gCurMask ? '0' : ''
+        var rMark = document.createElementNS ('http://www.w3.org/2000/svg','rect');
+        rMark.setAttribute ('fill', kleur [i % kleur.length] + alpha);
+        rMark.setAttribute ('fill-opacity', '0.5');
+        rMark.setAttribute ('width', '0');  // omdat <rect> geen standaard HTML element is werkt rMark.width = 0 niet.
+        rMarks.push (rMark);
+        isvgPrev.push (-1);
+    }
+    laadNoot ()
 }
 
 function doLayout (abctxt) {
@@ -533,7 +653,7 @@ function doLayout (abctxt) {
     }
 
     function svgInfo (type, s1, s2, x, y, w, h) {
-        if (type == 'note' || type == 'rest') {
+        if (type == 'note' || type == 'rest' || type == 'grace') {
             x = abc2svg.ax (x).toFixed (2);
             y = abc2svg.ay (y).toFixed (2);
             h = abc2svg.ah (h);
@@ -745,9 +865,7 @@ function markeer () {
             dt = (t1 - nt.t) * tf;          // delta abc tijd * tf = delta echte tijd in msec
         }
         nt.ns.forEach (function (noot, i) { // speel accoord
-            if (noot.dur <= 192) tf *= 1.3  // legato effect voor <= 1/8
-            else  tf *= 1.1                 // minder voor > 1/8
-            speel (t0, noot.mnum, noot.dur * tf, nt.vce, noot.velo);
+            speel (t0, noot.inst, noot.mnum, noot.cnt, noot.dur, tf, nt.vce, noot.velo, noot.orn);
         });
         putMarkLoc (nt); 
         iSeq += 1;
@@ -762,11 +880,11 @@ function markeer () {
 function keyDown (e) {
     var key = e.key;
     if (document.activeElement == mbar) {   // mbar heeft de focus
-        if (key == 'Enter' || key == ' ') $('#mbar').click ();  // => menu actief
+        if (key == 'Enter' || key == ' ' || key == 'm') $('#mbar').click ();  // => menu actief
         return;
     }
     if (menu.style.display != 'none') {     // menu is actief
-        if (key == 'Escape') $('#mbar').click ();   // => menu verdwijnt
+        if (key == 'Escape' || key == 'm') $('#mbar').click ();   // => menu verdwijnt
         return;
     }
     if (e.altKey || e.ctrlKey || e.shiftKey || key == 'Tab') return;  // browser shortcuts
@@ -844,13 +962,53 @@ function setTempo (inc) {   // is -0.1, 0.1
     tmpElm.value = curval + inc;
 }
 
-function speel (tijd, noot, dur, vce, velo) { // tijd en duur in millisecs
+function speel (tijd, inst, noot, cent, dur, tf, vce, velo, orn) {
     if (noot == -1) return; // een rust
-    var inst = instMap  [noot >> 7];
+    if (opt.burak && orn.naam == '//') orn.naam = '//burak'
+    switch (orn.naam) {
+    case 'lowermordent': case 'uppermordent':
+        var [mn_nr, cent_nr] = orn.naam == 'lowermordent' ? orn.nnr : orn.nop;
+        dur = dur * tf;
+        var d = dur / 4;
+        if (d > 100) d = 100;
+        speelhulp (tijd,       inst, noot,  cent,    d, vce, velo);
+        speelhulp (tijd +   d, inst, mn_nr, cent_nr, d, vce, velo);
+        speelhulp (tijd + 2*d, inst, noot,  cent,    dur - 2*d, vce, velo);
+        break;
+    case '//':
+        dur = dur * tf;
+        var d = dur / 4;
+        speelhulp (tijd,       inst, noot, cent, d, vce, velo);
+        speelhulp (tijd +   d, inst, noot, cent, d, vce, velo);
+        speelhulp (tijd + 2*d, inst, noot, cent, d, vce, velo);
+        speelhulp (tijd + 3*d, inst, noot, cent, d, vce, velo);
+        break;
+    case '//burak': orn.nop = [noot, cent]; // herhaal snel
+    case 'trill': 
+        dur = dur * tf;
+        var [mn_nr, cent_nr] = orn.nop;
+        var t = tijd;
+        while (t < tijd + dur) {
+            speelhulp (t, inst, noot, cent, 100, vce, velo);
+            t += 100;
+            speelhulp (t, inst, mn_nr, cent_nr, 100, vce, velo);
+            t += 100;
+        }
+        break;
+    default:
+        if (noot.dur <= 192) tf *= 1.3  // legato effect voor <= 1/8
+        else  tf *= 1.1                 // minder voor > 1/8
+        speelhulp (tijd, inst, noot, cent, dur * tf, vce, velo)
+    }
+}
+
+function speelhulp (tijd, inst, noot, cent, dur, vce, velo) { // tijd en duur in millisecs
+    inst = instMap  [inst];         // instrument uit het menu of met URL-parameter
+    noot += opt.transMap [vce] || 0;    // transpositie per stem met URL-parameter
     if (inst in instSf2Loaded && withRT) {
-        opneer (inst, noot % 128, tijd / 1000, (dur - 1) / 1000, vce, velo);  // msec -> sec
+        opneer (inst, noot, cent, tijd / 1000, (dur - 1) / 1000, vce, velo);  // msec -> sec
     } else if (inst in instArr){
-        var midiMsg = [0x90, noot, velo];
+        var midiMsg = [0x90, inst * 128 + noot, velo];
         zend (midiMsg, tijd, vce);
         midiMsg [2] = 0;
         zend (midiMsg, tijd + dur - 1, vce);
@@ -901,8 +1059,8 @@ function op (midiNum, time) {
     }
 }
 
-function opneer (instr, key, t, dur, vce, velo) {
-    var g, st, g1, g2, g3, lfo, g4, g5, panNode;
+function opneer (instr, key, cent, t, dur, vce, velo) {
+    var g, st, g1, g2, g3, lfo, g4, g5, panNode, vol;
     var th, td, decdur, suslev, fac, tend;
     var parm = params [instr][key];
     if (!parm) return;    // key does not exist
@@ -920,6 +1078,7 @@ function opneer (instr, key, t, dur, vce, velo) {
         o.loopEnd = parm.loopEnd;
     }
     o.playbackRate.value = rates [instr][key];
+    o.detune.value = cent;
 
     if (wl) {   // tremolo en/of vibrato
         lfo = audioCtx.createOscillator ();
@@ -944,7 +1103,7 @@ function opneer (instr, key, t, dur, vce, velo) {
     }
 
     if (we) {
-        var vol = 1.0
+        vol = 1.0
         g4 = audioCtx.createGain();
         g4.gain.setValueAtTime (0, t);  // mod env is lineair
         g4.gain.linearRampToValueAtTime (vol, t + parm.envatt);
@@ -1031,56 +1190,52 @@ function decode (xs) {
     });
 }
 
-function inst_create (instr) {
-    return new Promise (function (resolve, reject) {
-        rates [instr] = [];
-        params[instr] = [];
-        function sampleIter (i) {
-            var gen, parm, sample, scale, tune, cd;
-            gen = instData [i];
-            if (!gen && i < instData.length - 1) { sampleIter (i + 1); return; }
-            parm = {
-                attack:  gen.attack,
-                hold:    gen.hold,
-                decay:   gen.decay,
-                sustain: gen.sustain,
-                release: gen.release,
-                atten:   gen.atten,
-                filter:  gen.filter,
-                lfodel:  gen.lfodel,
-                lfofreq: gen.lfofreq,
-                lfo2ptc: gen.lfo2ptc,
-                lfo2vol: gen.lfo2vol,
-                envatt:  gen.envatt,
-                envhld:  gen.envhld,
-                envdec:  gen.envdec,
-                envsus:  gen.envsus,
-                envrel:  gen.envrel,
-                env2flt: gen.env2flt,
-                uselfo: hasLFO && gen.lfofreq > 0.008 && (gen.lfo2ptc != 0 || gen.lfo2vol != 0), // LFO needed (vibrato or tremolo)
-                useflt: hasFlt && gen.filter < 16000,                       // lowpass filter needed
-                useenv: hasVCF && gen.filter < 16000 && gen.env2flt != 0,   // modulator envelope needed
-            }
-            if (gen.loopStart) {
-                parm.loopStart = gen.loopStart;
-                parm.loopEnd   = gen.loopEnd;
-            }
-            scale = gen.scale;
-            tune =  gen.tune;
-            for (var j = gen.keyRangeLo; j <= gen.keyRangeHi; j++) {
-                rates [instr][j] = Math.pow (Math.pow (2, 1 / 12), (j + tune) * scale);
-                params[instr][j] = parm;
-            }
-            decode (gen.sample).then (function (audBuf) { // b64 encoded binary string -> AudioBuffer
-                parm.buffer = audBuf;
-                if (i < instData.length - 1) sampleIter (i + 1);
-                else { instData = ''; resolve ('ok'); }   // save memory
-            }).catch (function (error) {
-                reject (error);
-            });
+async function inst_create (instr) {
+    rates [instr] = [];
+    params[instr] = [];
+    for (var i = 0; i < instData.length; ++i) {
+        var gen, parm, sample, scale, tune, cd;
+        gen = instData [i];
+        if (!gen) continue;    // sample wordt overgeslagen?
+        parm = {
+            attack:  gen.attack,
+            hold:    gen.hold,
+            decay:   gen.decay,
+            sustain: gen.sustain,
+            release: gen.release,
+            atten:   gen.atten,
+            filter:  gen.filter,
+            lfodel:  gen.lfodel,
+            lfofreq: gen.lfofreq,
+            lfo2ptc: gen.lfo2ptc,
+            lfo2vol: gen.lfo2vol,
+            envatt:  gen.envatt,
+            envhld:  gen.envhld,
+            envdec:  gen.envdec,
+            envsus:  gen.envsus,
+            envrel:  gen.envrel,
+            env2flt: gen.env2flt,
+            uselfo: hasLFO && gen.lfofreq > 0.008 && (gen.lfo2ptc != 0 || gen.lfo2vol != 0), // LFO needed (vibrato or tremolo)
+            useflt: hasFlt && gen.filter < 16000,                       // lowpass filter needed
+            useenv: hasVCF && gen.filter < 16000 && gen.env2flt != 0,   // modulator envelope needed
         }
-        sampleIter (0);
-    });
+        if (gen.loopStart) {
+            parm.loopStart = gen.loopStart;
+            parm.loopEnd   = gen.loopEnd;
+        }
+        scale = gen.scale;
+        tune =  gen.tune;
+        for (var j = gen.keyRangeLo; j <= gen.keyRangeHi; j++) {
+            rates [instr][j] = Math.pow (Math.pow (2, 1 / 12), (j + tune) * scale);
+            params[instr][j] = parm;
+        }
+        try {
+            parm.buffer = await decode (gen.sample) // b64 encoded binary string -> AudioBuffer
+        } catch (err) {
+            logcmp (err);
+            throw err;   // -> uitzondering in laadSF2noot => over naar MIDI-js
+        }
+    }
 }
 
 function laadJSfont (inst, url) {
@@ -1098,71 +1253,48 @@ function laadJSfont (inst, url) {
     });
 }
 
-function laadNoot () {
-    async function laadSF2noot (inst) {
-        var fnm = 'instr' + inst + 'mp3.js';
+async function laadNoot () {
+    cmpDlg.style.display = 'block';
+    cmpDlg.innerHTML = withRT ? 'Loading SF2 fonts<br>' : 'Loading MIDI-js fonts<br>';
+    var urls = [{url: opt.sf2url1, metRT: 1}, {url: opt.sf2url2, metRT: 1},
+                {url: opt.midijsUrl1, metRT: 0}, {url: opt.midijsUrl2, metRT: 0}]
+    if (!withRT) urls = urls.slice (2);
+    for (var x of urls) {
         try {
-            await laadJSfont (inst, opt.sf2url1 + fnm);
+            await laadNoot2 (x.url, x.metRT)
+            cmpDlg.style.display = 'none';
+            logerr ('fonts geladen')
+            return;
         } catch (err) {
-            logcmp (err);
-            if (!opt.sf2url2) throw err;
-            try {
-                await laadJSfont (inst, opt.sf2url2 + fnm);
-            } catch (err) {
-                logcmp (err);
-                throw err;
-            }
+            cmpDlg.innerHTML += err + '<br>'
+            logerr (err);
         }
-        await inst_create (inst);   // kan uitzondering maken
-        return 'goed';
     }
-    async function laadSF2noten (instarr) {
-        for (const inst of instarr) {
+    logcmp (' ... give up');
+}
+
+async function laadNoot2 (fonturl, metRT) {
+    async function laadSF2Arr (instarr, pf) {
+        for (var ix = 0; ix < instarr.length; ix++) {
+            var inst = instarr [ix];
             if (inst in instSf2Loaded) continue;
-            loginst ('loading instrument: ' + inst);
-            try {
-                await laadSF2noot (inst)
-            } catch (err) {
-                logcmp (' ... switch to MIDI-js');
-                withRT = 0;
-                laadNoot ();
-                return;
-            }
+            loginst (ix + ' loading instrument: ' + inst + (pf ? ' from: ' + pf : ''));
+            var url = pf + 'instr' + inst + 'mp3.js';
+            await laadJSfont (inst, url)    // => instData
+            await inst_create (inst)
             instSf2Loaded [inst] = 1;
         }
-        cmpDlg.style.display = 'none';
-        logerr ('fonts geladen')
     }
-    async function laadJSnoot (instNm) {
-        var fnm = instNm + '-mp3.js';
-        try {
-            await laadJSfont (instNm, opt.midijsUrl1 + fnm)
-        } catch (err) {
-            logcmp (err);
-            if (!opt.midijsUrl2) throw err;
-            try {
-                await laadJSfont (instNm, opt.midijsUrl2 + fnm);
-            } catch (err) {
-                logcmp (err);
-                throw err;
-            }
-        }
-        return 'goed';
-    }
-    async function laadJSNoten (instarr, midiNums) {
-        for (const inst of instarr) {
+    async function laadMidiJsArr (instarr, pf) {
+        for (var ix = 0; ix < instarr.length; ++ix) {
+            var inst = instarr [ix];
+            if (inst in instArr) continue;
+            loginst (ix + ' loading instrument: ' + inst + ' from: ' + pf + '...');
             var instNm = inst in opt.instTab ? opt.instTab [inst] : inst_tb [inst]; // standard GM name;
-            loginst ('loading instrument: ' + inst);
-            try {
-                await laadJSnoot (instNm);
-            } catch (err) {
-                logcmp (' ... give up');
-            }
+            var url = pf + instNm + '-mp3.js';
+            await laadJSfont (inst, url)
             instArr [inst] = MIDI.Soundfont [instNm];
         }
-        logerr ('fonts geladen');
-        cmpDlg.innerHTML += 'decode notes:'
-        decodeMidiNums (midiNums);   // only decode samples of notes used in the score
     }
     async function decodeMidiNums (midiNums) {
         for (var ix = 0; ix < midiNums.length; ++ix) {            
@@ -1179,52 +1311,50 @@ function laadNoot () {
             midiLoaded [insmid] = 1; // onthoud dat de noot geladen is
         }
         gToSynth = 1;
-        cmpDlg.style.display = 'none';
-        logerr ('notes decoded')
+        loginst ('notes decoded')
     }
     var instrs = {};
+    withRT = metRT
     midiUsedArr.forEach ((mnum) => { instrs [mnum >> 7] = 1; });
-    cmpDlg.innerHTML = withRT ? 'Loading SF2 fonts<br>' : 'Loading MIDI-js fonts<br>';
-    cmpDlg.style.display = 'block';
     if (withRT) {   // load SF2 fonts
-        document.getElementById ('sf2').checked = 'true';
-        laadSF2noten (Object.keys (instrs));
+            await laadSF2Arr (Object.keys (instrs), fonturl);
     } else {        // load MIDI-js fonts
         document.getElementById ('midijs').checked = 'true'
         var midiNums = midiUsedArr.filter (function (m) { return !(m in midiLoaded); });
-        laadJSNoten (Object.keys (instrs), midiNums);
+        await laadMidiJsArr (Object.keys (instrs), fonturl)
+        cmpDlg.innerHTML += 'decode notes:'
+        await decodeMidiNums (midiNums);   // only decode samples of notes used in the score
     }
 }
 
-function getPreload (xmlfnm, p_html, p_url, verder) {
+async function getPreload (xmlfnm, p_html, p_url, verder) {
     var xs = xmlfnm.match (/(.*\/)?([^/]*)$/);  // => [hele uitdrukking, pad, bestand]
     var pad = './' + (xs [1] ? xs [1] : '');    // relatieve pad naar parameter file t.o.v. plaats xmlplay.html
     var waitElm = document.getElementById ('wait');
     waitElm.style.display = 'block';
-    import (pad + 'parms.js').then (function (mod) {
+    try {
+        var mod = await import (pad + 'parms.js')
         logerr ('parms.js loaded');
-        doParms (p_html, p_url, mod.parms, verder)
-    }).catch (function (err) {
+        doParms (p_html, p_url, mod.parms)
+    } catch (err) {
         if (err.name == 'TypeError') logerr ('no parms.js present');
         else logerr ('Error in parms.js: ' + err.message);
-        doParms (p_html, p_url, {}, verder);
-    }).finally (() => {
-        var request = new XMLHttpRequest ();
-        request.open ('GET', xmlfnm, true); // type request.response == ??
-        request.onload = function () {
-            logerr ('preload ok');
-            readAbcOrXML (request.response);
-            playbk.style.display = 'block';
-            waitElm.style.display = 'none';
-        }
-        request.onerror = function () {
-            waitElm.innerHTML += '\npreload failed';
-        }
-        request.send();
-    });
+        doParms (p_html, p_url, {});
+    }
+    try {
+        var res = await fetch (xmlfnm)
+        var xmltxt = await res.text ();
+        logerr ('preload ok');
+        readAbcOrXML (xmltxt);
+        playbk.style.display = 'block';
+        waitElm.style.display = 'none';
+    } catch (err) {
+        waitElm.innerHTML += '\npreload failed';
+        throw (err)
+    }
 }
 
-function doParms (p_html, p_url, p_mod, verder) {
+function doParms (p_html, p_url, p_mod) {
     var p = {};
     Object.assign (p, p_html, p_mod, p_url);    // in volgorde van prioriteit
     if (p.topSpace != undefined) topSpace = p.topSpace;
@@ -1239,47 +1369,59 @@ function doParms (p_html, p_url, p_mod, verder) {
     if (p.noErr != undefined)  { errElm.style.display = 'none'; errElm.style.height = '0px'; };
     if (p.noPF != undefined) noPF = 1;
     if (p.noLB != undefined) noLB = 1;
-    if (p.noRT != undefined) withRT = 0;
+    if (p.noRT != undefined) withRT = !p.noRT;
+    if (p.rbm != undefined) opt.rbm = p.rbm;
+    if (p.burak != undefined) opt.burak = p.burak;
     if (p.instTab != undefined) opt.instTab = p.instTab;
     if (p.sf2url1 != undefined) opt.sf2url1 = p.sf2url1;
     if (p.sf2url2 != undefined) opt.sf2url2 = p.sf2url2;
     if (p.midijsUrl1 != undefined) opt.midijsUrl1 = p.midijsUrl1;
     if (p.midijsUrl2 != undefined) opt.midijsUrl2 = p.midijsUrl2;
-    verder ('ok');  // vervul de belofte van parsePreload
+    if (p.inst != undefined) {
+        for (var t of p.inst) {
+            if (t.length == 2) t.push (0)
+            var [vnum, instnum, transval] = t
+            opt.instList [vnum] = 1 * instnum;
+            opt.transMap [vnum] = 1 * transval;
+        }
+    }
+    if (p.deb != undefined) debug = 1;
 }
 
-function parsePreload () {  // => getPreload => doParms => verder
-    return new Promise (function (verder) { // ga pas verder als alle parameters toegekend zijn (na doParms)
-        var parstr, xmlfnm = '', preload = '', ps, i, xs, prm, p, r, p_url = {};
-        errElm.innerHTML = '';
-        parstr = window.location.href.replace ('?dl=0','').split ('?'); // look for parameters in the url;
-        if (parstr.length > 1) {
-            ps = parstr [1].split ('&');
-            for (i = 0; i < ps.length; i++) {
-                p = ps [i].replace (/d:(\w{15}\/[^.]+\.)/, 'https://dl.dropboxusercontent.com/s/$1');
-                if (p == 'noErr') p_url.noErr = 1;
-                else if (p == 'noMenu') p_url.noMenu = 1;
-                else if (p == 'noSave') p_url.noSave = 1;
-                else if (p == 'noDash') p_url.noDash = 1;
-                else if (p == 'noRT') p_url.noRT = 1;     // no realtime sf2, use pre-rendered MIDIjs
-                else if (p == 'noPF') p_url.noPF = 1;     // do not translate xml page format
-                else if (p == 'noLB') p_url.noLB = 1;     // do not translate xml line breaks
-                else if (r = p.match (/noCur=([\da-fA-F]{2})/)) p_url.noCur = parseInt (r [1], 16);
-                else if (p == 'nosm') hasSmooth = false;
-                else if (p == 'ios') { hasLFO = 0; hasFlt = 0; hasVCF = 0; hasPan = 0; hasSmooth = 0; }
-                else if (r = p.match (/sf2=(\w+)/)) p_url.sf2url2 = r [1] + '/';
-                else if (r = p.match (/speed=([\d.]+)/)) p_url.speed = parseFloat (r [1]);
-                else preload = p;
-            }
-        };
-        prm = document.getElementById ('parms');
-        if (prm) prm.style.display = 'none';
-        var p_html = prm ? JSON.parse (prm.innerHTML) : {} ;
+async function parsePreload () {  // => getPreload => doParms => verder
+    var parstr, xmlfnm = '', preload = '', ps, i, xs, prm, p, r, p_url = {};
+    errElm.innerHTML = '';
+    parstr = window.location.href.replace ('?dl=0','').split ('?'); // look for parameters in the url;
+    if (parstr.length > 1) {
+        ps = parstr [1].split ('&');
+        for (i = 0; i < ps.length; i++) {
+            p = ps [i].replace (/d:(\w{15}\/[^.]+\.)/, 'https://dl.dropboxusercontent.com/s/$1');
+            if (p == 'noErr') p_url.noErr = 1;
+            else if (p == 'noMenu') p_url.noMenu = 1;
+            else if (p == 'noSave') p_url.noSave = 1;
+            else if (p == 'noDash') p_url.noDash = 1;
+            else if (p == 'noRT') p_url.noRT = 1;     // no realtime sf2, use pre-rendered MIDIjs
+            else if (p == 'noPF') p_url.noPF = 1;     // do not translate xml page format
+            else if (p == 'noLB') p_url.noLB = 1;     // do not translate xml line breaks
+            else if (r = p.match (/noCur=([\da-fA-F]{2})/)) p_url.noCur = parseInt (r [1], 16);
+            else if (p == 'nosm') hasSmooth = false;
+            else if (p == 'ios') { hasLFO = 0; hasFlt = 0; hasVCF = 0; hasPan = 0; hasSmooth = 0; }
+            else if (r = p.match (/sf2=(\w+)/)) p_url.sf2url2 = r [1] + '/';
+            else if (r = p.match (/speed=([\d.]+)/)) p_url.speed = parseFloat (r [1]);
+            else if (r = p.match (/inst=([,-\d:]*)/)) p_url.inst = r[1].split (',').map (x => x.split (':'));
+            else if (p == 'deb') p_url.deb = 1;
+            else if (p == 'rbm') p_url.rbm = 1;
+            else if (p == 'burak') { p_url.rbm = 1; p_url.burak = 1; }
+            else preload = p;
+        }
+    };
+    prm = document.getElementById ('parms');
+    if (prm) prm.style.display = 'none';
+    var p_html = prm ? JSON.parse (prm.innerHTML) : {} ;
 
-        if (/(\.xml$)|(\.abc$)/.test (preload)) { xmlfnm = preload; preload = ''; }
-        if (xmlfnm) getPreload (xmlfnm, p_html, p_url, verder);
-        else doParms (p_html, p_url, {}, verder);
-    });
+    if (/(\.xml$)|(\.abc$)/.test (preload)) { xmlfnm = preload; preload = ''; }
+    if (xmlfnm) await getPreload (xmlfnm, p_html, p_url);
+    else doParms (p_html, p_url, {});
 }
 
 function resizeNotation () {
