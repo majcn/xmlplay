@@ -57,9 +57,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     "x-songUrl": `abc/${getSongName()}.abc`,
     "x-onSongLoad": addVoiceButtons,
     "x-commonAbc": commonAbc,
-    sf2url1: "./jssf_files/",
-    sf2url2: "https://wim.vree.org/js3/jssf_files/",
+    sf2url1: "./js3/",
+    sf2url2: "https://wim.vree.org/js3/",
     noErr: true,
   });
 });
-

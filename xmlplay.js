@@ -1576,9 +1576,7 @@ async function init(parms) {
         ev.stopPropagation ();  // anders krijgt notation/body/svg ook de click
     });
     hasSmooth = CSS.supports ('scroll-behavior', 'smooth');
-    await new Promise (function (verder) {
-      getPreload(parms["x-songUrl"], parms, {}, verder)
-    });
+    await getPreload(parms["x-songUrl"], parms, {});
     resizeNotation ();
     var ac = window.AudioContext || window.webkitAudioContext;
     audioCtx = ac != undefined ? new ac () : null;
