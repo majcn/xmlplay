@@ -5,7 +5,7 @@ import path from 'path'
 import 'dotenv/config'
 
 function createServer(port) {
-  const DEVELOPMENT_ABC_LOCATION = process.env.DEVELOPMENT_ABC_LOCATION
+  const DEVELOPMENT_ABC_LOCATION = process.env.DEVELOPMENT_ABC_LOCATION || path.resolve(path.dirname(__filename), '../../')
 
   console.log(`Starting development server http://localhost:${port}/ for api proxy.`)
   console.log('  Using ABC location: ' + DEVELOPMENT_ABC_LOCATION)
