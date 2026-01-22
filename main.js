@@ -1,4 +1,5 @@
 import "./style.css";
+import "./style-main.css";
 
 import abc2svg from "./vendor/abc2svg/abc2svg-bundle.js";
 import xmlplay from "./xmlplay.js";
