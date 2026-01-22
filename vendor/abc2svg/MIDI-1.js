@@ -1,6 +1,6 @@
 // MIDI.js - module to handle the %%MIDI parameters
 //
-// Copyright (C) 2019-2025 Jean-Francois Moine
+// Copyright (C) 2019-2026 Jean-François Moine
 //
 // This file is part of abc2svg.
 //
@@ -25,12 +25,17 @@
 //	%%MIDI control k v
 //	%%MIDI drummap ABC_note MIDI_pitch
 //	%%MIDI temperamentequal nedo
+//	%%MIDI gchordbars n
 //	%%MIDI chordname <chord_type> <list of MIDI pitches>
 //	%%MIDI chordprog <#MIDI program> [octave=<n>]
 //	%%MIDI chordvol <volume>
 //	%%MIDI gchord <string>
 //	%%MIDI gchordon
 //	%%MIDI gchordoff
+//	%%MIDI drum <string> <pitches> <volumes>
+//	%%MIDI drumon
+//	%%MIDI drumoff
+//	%%MIDI drumbars n
 
 // Using %%MIDI drummap creates a voicemap named "MIDIdrum".
 // This name must be used if some print map is required:
@@ -69,11 +74,12 @@ abc2svg.MIDI = {
 
     // do_midi()
     var	n, v, s, maps,
-	o, q, n, qs,
+	o, q, qs,
 	a = parm.split(/\s+/),
 	abc = this,
 	cfmt = abc.cfmt(),
-	curvoice = abc.get_curvoice()
+	curvoice = abc.get_curvoice(),
+	parse = abc.get_parse()
 
 	if (curvoice) {
 		if (curvoice.ignore)
@@ -113,7 +119,7 @@ abc2svg.MIDI = {
 		}
 		if (!cfmt.chord)
 			cfmt.chord = {}
-		cfmt.chord.vol = v / 127
+		cfmt.chord.vol = v
 		break
 //	case "drone":		// %%MIDI drone <#prog> <pit_1> <pit_2> <vol_1> <vol_2>
 //				//	default: 70 45 33 80 80
@@ -122,6 +128,51 @@ abc2svg.MIDI = {
 //		break
 //	case "droneoff":	// %%MIDI droneoff
 //		break
+	case "drum":		// %%MIDI drum <string> <pitches> <volumes>
+	case "drumon":
+	case "drumoff":
+	case "drumbars":	// %%MIDI drumbars n
+		if (!curvoice) {
+			abc.syntax(1, "$1 must be in a voice", "%%MIDI " + a[1])
+			break
+		}
+		cfmt.drum = 1
+		s = abc.new_block("mididrum")
+		s.play = s.invis = 1 //true
+		switch (a[1].slice(4)) {
+		case "on":
+			s.on = 1
+			break
+		case "off":
+			s.on = 0
+			break
+		case "bars":
+			s.nb = +a[2]
+			if (isNaN(s.nb))
+				q = 1
+			break
+		default:
+			s.txt = a.slice(2)
+			v = s.txt[0].match(/[dz][2-9]?/g)	// check the parameters
+			if (v && v.join('') != s.txt[0])
+				v = null
+			if (v) {
+				n = s.txt[0].match(/d/g).length
+				v = s.txt.slice(1).join(' ')
+				v = v.match(/[^dz\s][0-9]+/g)
+				if (v && (v.length == n || v.length == 2 * n))
+					break
+			}
+			q = 1
+			break
+		}
+		if (q) {				// if some error
+			abc.syntax(1, abc.errs.bad_val, "%%MIDI " + a[1])
+			curvoice.last_sym = s.prev	// unlink the symbol
+			if (s.prev)
+				s.prev.next = null
+		}
+		break
 	case "gchord":		// %%MIDI gchord <list of letters and repeat numbers>
 //				//	z rest
 //				//	c chord
@@ -136,20 +187,25 @@ abc2svg.MIDI = {
 //				//	M:6/8	fzcfzc
 //				//	M:9/8	fzcfzcfzc
 		// fall thru
+	case "gchordbars":	// %%MIDI gchordbars n
 	case "gchordon":	// %%MIDI gchordon
 	case "gchordoff":	// %%MIDI gchordoff
 		if (!cfmt.chord)
 			cfmt.chord = {}
-		if (abc.parse.state >= 2
+		if (parse.state >= 2
 		 && curvoice) {
 			s = abc.new_block("midigch")
 			s.play = s.invis = 1 //true
 			if (a[1][6] == 'o')
 				s.on = a[1][7] == 'n'
+			else if (a[1][6] == 'b')
+				s.gchnb = +a[2]
 			else
 				s.rhy = a[2]		// chord rhythm
 		} else if (a[1][6] == 'o') {
 			cfmt.chord.gchon = a[1][7] == 'n'
+		} else if (a[1][6] == 'b') {
+			cfmt.chord.gchnb = +a[2]
 		} else {
 			cfmt.chord.rhy = a[2]
 		}
@@ -161,7 +217,7 @@ abc2svg.MIDI = {
 			break
 		}
 		v--				// channel range 1..16 => 0..15
-			if (abc.parse.state == 3) {
+			if (parse.state >= 2) {
 				s = abc.new_block("midiprog")
 				s.play = s.invis = 1 //true
 				s.chn = v
@@ -204,7 +260,7 @@ abc2svg.MIDI = {
 			abc.syntax(1, abc.errs.bad_val, "%%MIDI program")
 			break
 		}
-		if (abc.parse.state == 3) {
+		if (parse.state >= 2) {
 			s = abc.new_block("midiprog");
 			s.play = s.invis = 1 //true
 			s.instr = v[0]
@@ -226,7 +282,7 @@ abc2svg.MIDI = {
 			abc.syntax(1, "Bad controller value in %%MIDI")
 			break
 		}
-		if (abc.parse.state == 3) {
+		if (parse.state >= 2) {
 			s = abc.new_block("midictl");
 			s.play = s.invis = 1 //true
 			s.ctrl = n;
@@ -381,10 +437,6 @@ abc2svg.MIDI = {
     }
 } // MIDI
 
-export default function apply(abc2svgObj) {
-	if (!abc2svgObj.mhooks)
-		abc2svgObj.mhooks = {}
-
-	abc2svgObj.mhooks.MIDI = abc2svg.MIDI.set_hooks
-	abc2svgObj.MIDI = abc2svg.MIDI
-}
+if (!abc2svg.mhooks)
+	abc2svg.mhooks = {}
+abc2svg.mhooks.MIDI = abc2svg.MIDI.set_hooks

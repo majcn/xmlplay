@@ -6,7 +6,7 @@
 <script src="jquery-3.3.1.slim.min.js"></script>
 <script src="abc2svg-1.js"></script>
 <script src="xml2abc.js"></script>
-<script src="xmlplay.js"></script>
+<script src="xmlplay.js" type="module"></script>
 <style>
 .rat { width: 100%; height:100%; margin:0px; overflow: auto; }
 body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -22,16 +22,12 @@ label, input, select, #mbar, #schuivers { font-family: arial; font-size: 15px; }
 #notation { height: 95%; display: inline-block; vertical-align: top; }
 #err      { height:  5%; background-color: #eee;}
 #err:hover { height:  50%; position:absolute; top:50%; }
-#rollijn  { position:absolute; height:30px; width:100%; z-index:1; top: 30%; }
-#rollijn:hover { cursor: row-resize; background: rgba(0,255,0,0.3); }
 #tempo    { width: 3em; }
 #abcfile { display: inline-block; }
 #mtrsvg   { vertical-align: middle; }
 #schuivers { justify-content: space-around; border-top: black 1px solid; padding-top: 5px; }
 .dashed   { border-bottom: thin dashed black; }
 .spel     { background: rgba(0,255,0,0.3); }
-.dlog     { display:none; background:lightblue; position:absolute; top: 50%; left: 50%; width:60%; padding:10px;
-            transform: translate(-50%,-50%); z-index:9; overflow: auto; }
 .indrag   { background: #aaa; }
 .rij     { display: flex; flex-wrap: wrap; justify-content: space-between; }
 .schuif  { margin-right: 10px; display: flex; flex-direction: column; }
@@ -81,8 +77,6 @@ input[type="range"] { writing-mode: vertical-lr; }
     </div>
 </div>
 <pre class="rat" id="err"></pre>
-<div id="rollijn" class="dashed" title="drag to reposition the focussed staff"></div>
-<div id="comp" class="dlog">wait until soundfonts are loaded ...<br></div>
 <pre id="wait" class="dlog">Loading, please wait ...</pre>
 <div id="saveDiv" style="display:none;"></div>
 <svg class="dlog" id="playbk" width="100" height="100" viewBox="0 0 20 20" style="z-index:8" xmlns="http://www.w3.org/2000/svg">

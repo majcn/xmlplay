@@ -1,6 +1,6 @@
 import "./style.css";
 
-import abc2svg from "./vendor/abc2svg/abc2svg-1.js";
+import abc2svg from "./vendor/abc2svg/abc2svg-bundle.js";
 import xmlplay from "./xmlplay.js";
 
 import commonAbc from "./common.abc?raw"
@@ -8,8 +8,8 @@ import commonAbc from "./common.abc?raw"
 const player = xmlplay(abc2svg);
 
 function initSpeedRangeElement() {
-  const speedRangeValue = document.getElementById("speed-input-value");
-  const speedRange = document.getElementById("speed-input");
+  const speedRangeValue = document.getElementById("tempo-value");
+  const speedRange = document.getElementById("tempo");
   speedRange.addEventListener("input", (evt) => {
     speedRangeValue.innerHTML = Math.round(evt.target.value * 100) + "%";
   });

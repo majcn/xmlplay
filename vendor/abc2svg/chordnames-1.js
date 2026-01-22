@@ -101,10 +101,6 @@ abc2svg.chordnames = {
     } // set_hooks()
 } // chordnames
 
-export default function apply(abc2svgObj) {
-	if (!abc2svgObj.mhooks)
-		abc2svgObj.mhooks = {}
-
-	abc2svgObj.mhooks.chordnames = abc2svg.chordnames.set_hooks
-	abc2svgObj.chordnames = abc2svg.chordnames
-}
+if (!abc2svg.mhooks)
+	abc2svg.mhooks = {}
+abc2svg.mhooks.chordnames = abc2svg.chordnames.set_hooks

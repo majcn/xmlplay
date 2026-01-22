@@ -115,20 +115,6 @@ select,
     position: absolute;
     top: 50%;
 }
-#rollijn {
-    position: absolute;
-    height: 30px;
-    width: 100%;
-    z-index: 1;
-    top: 30%;
-}
-#rollijn:hover {
-    cursor: row-resize;
-    background: #00ff004d;
-}
-#tempo {
-    width: 3em;
-}
 #abcfile {
     display: inline-block;
 }
@@ -145,18 +131,6 @@ select,
 }
 .spel {
     background: #00ff004d;
-}
-.dlog {
-    display: none;
-    background: #add8e6;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 60%;
-    padding: 10px;
-    transform: translate(-50%, -50%);
-    z-index: 9;
-    overflow: auto;
 }
 .indrag {
     background: #aaa;
