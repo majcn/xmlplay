@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: (id) => {
-            if (id.includes('abc2svg-1.js')) return 'abc2svg'
+            if (id.includes('abc2svg-bundle.js')) return 'abc2svg'
           },
         },
       },
