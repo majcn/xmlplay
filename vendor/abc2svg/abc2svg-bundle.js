@@ -427,10 +427,6 @@ function syntax(sev, msg, a1, a2, a3, a4) {
 	error(sev, s, msg, a1, a2, a3, a4)
 }
 
-// inject javascript code
-function js_inject(js) {
-	eval('"use strict";\n' + js)
-}
 // abc2svg - deco.js - decorations
 //
 // Copyright (C) 2014-2025 Jean-Francois Moine
@@ -15663,7 +15659,7 @@ function new_meter(p) {
 						break
 					meter.top += p[i++]
 				}
-				m1 = eval(meter.top.replace(/ /g, '+'))
+				m1 = meter.top.split("+").reduce((acc, curr) => acc + parseInt(curr), 0)
 				break
 			}
 			if (!in_parenth) {
@@ -21403,7 +21399,7 @@ Abc.prototype.do_begin_end = function(type,
 		do_cloning()
 	switch (type) {
 	case "js":
-		js_inject(text)
+		// do nothing
 		break
 	case "ml":
 		if (cfmt.pageheight) {
