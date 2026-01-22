@@ -1,4 +1,4 @@
-import "./style-xmlplay.css";
+import "./vendor/xmlplay/xmlplay.css";
 import "./style.css";
 
 import abc2svg from "./vendor/abc2svg/abc2svg-bundle.js";
