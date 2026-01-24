@@ -50,7 +50,8 @@ update_instrument() {
   # Copy to public directory
   echo "  → Copying to public/js3/$instrument_file"
   mkdir -p "$PUBLIC_DIR"
-  cp "$VENDOR_DIR/$instrument_file" "$PUBLIC_DIR/$instrument_file"
+  rm "$PUBLIC_DIR/$instrument_file"
+  ln -s "../../vendor/xmlplay/$instrument_file" "$PUBLIC_DIR/$instrument_file"
   
   echo "✓ Successfully updated $instrument_file"
   echo ""
