@@ -72,3 +72,18 @@
 #mbar:hover {
   cursor: default;
 }
+
+/* Mobile: Position control bar below title instead of overlapping */
+@media (max-width: 768px) {
+  #btns {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  #mbar {
+    justify-content: center;
+  }
+}
