@@ -136,7 +136,6 @@ abc2svg.MIDI = {
 			abc.syntax(1, "$1 must be in a voice", "%%MIDI " + a[1])
 			break
 		}
-		cfmt.drum = 1
 		s = abc.new_block("mididrum")
 		s.play = s.invis = 1 //true
 		switch (a[1].slice(4)) {
@@ -160,10 +159,28 @@ abc2svg.MIDI = {
 				n = s.txt[0].match(/d/g).length
 				v = s.txt.slice(1).join(' ')
 				v = v.match(/[^dz\s][0-9]+/g)
-				if (v && (v.length == n || v.length == 2 * n))
-					break
+				if (!v || (v.length != n && v.length != 2 * n))
+					v = null
 			}
-			q = 1
+			if (!v) {
+				q = 1
+				break
+			}
+			s.seq = []
+		    var	i = 0,
+			j = 3
+			while (1) {
+				v = a[2][i++]		// string
+				if (!v)
+					break
+				if (v == 'z')
+					s.seq.push(null)
+				else if (v >= '2' && v < '9')
+					while (--v > 0)
+						s.seq.push(null)
+				else
+					s.seq.push([a[j++]])	// pitches
+			}
 			break
 		}
 		if (q) {				// if some error
@@ -172,6 +189,8 @@ abc2svg.MIDI = {
 			if (s.prev)
 				s.prev.next = null
 		}
+		if (!cfmt.drum)
+			cfmt.drum = {}			// (needed to call gendrum)
 		break
 	case "gchord":		// %%MIDI gchord <list of letters and repeat numbers>
 //				//	z rest
@@ -190,6 +209,11 @@ abc2svg.MIDI = {
 	case "gchordbars":	// %%MIDI gchordbars n
 	case "gchordon":	// %%MIDI gchordon
 	case "gchordoff":	// %%MIDI gchordoff
+		if (a[1].length == 6			// if %%MIDI gchord <list>
+		 && !/^[0-9bcf-kG-Kz+]+$/.test(a[2])) {
+			abc.syntax(1, abc.errs.bad_val, "%%MIDI gchord")
+			break
+		}
 		if (!cfmt.chord)
 			cfmt.chord = {}
 		if (parse.state >= 2

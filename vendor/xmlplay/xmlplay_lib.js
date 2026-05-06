@@ -1,4 +1,4 @@
-//~ xmlplay_lib, Revision: 181, Copyright (C) 2016-2025: Willem Vree, contributions Stéphane David.
+//~ xmlplay_lib, Revision: 182, Copyright (C) 2016-2025: Willem Vree, contributions Stéphane David.
 //~ This program is free software; you can redistribute it and/or modify it under the terms of the
 //~ GNU General Public License as published by the Free Software Foundation; either version 2 of
 //~ the License, or (at your option) any later version.
@@ -159,7 +159,7 @@ function doModel (abctxt, opt, gTempo=120, debug, mapTab, logerr, putMarkExt_p) 
         function compute_ornament (has_orn, n, p, v, arpeg_duur) {
             var nootop = noot2mid (n, p + 1, v);
             var nootneer = noot2mid (n, p - 1, v);
-            var ardpeg_duur = arpeg_duur > 48 ? 48 : arpeg_duur;    // 48 == 100 msec bij tempo 75
+            arpeg_duur = arpeg_duur > opt.arpmaxdur ? opt.arpmaxdur : arpeg_duur;
             return { naam: has_orn, nop: nootop, nnr: nootneer, ard: arpeg_duur }
         }
         function voegVslg (voorslag, tijd, duur, deNoten) {

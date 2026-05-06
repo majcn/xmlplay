@@ -429,7 +429,7 @@ function js_inject(js) {
 }
 // abc2svg - deco.js - decorations
 //
-// Copyright (C) 2014-2025 Jean-Francois Moine
+// Copyright (C) 2014-2026 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -511,9 +511,9 @@ var decos = {
 //	"5": "3 fng 5,5 3 3 5",
 	plus: "3 dplus 8,2 2 4",
 	"+": "3 dplus 8,2 2 4",
-	">": "5 accent 3.5,3.5 4 4",
-	accent: "5 accent 3.5,3.5 4 4",
-	emphasis: "5 accent 3.5,3.5 4 4",
+	">": "3 accent 3.5,3.5 4 4",
+	accent: "3 accent 3.5,3.5 4 4",
+	emphasis: "3 accent 3.5,3.5 4 4",
 	marcato: "3 marcato 9 5 5",
 	"^": "3 marcato 9 5 5",
 	mordent: "3 lmrd 6,5 4 6",
@@ -544,9 +544,9 @@ var decos = {
 	"D.S.alcoda": "5 dacs 16 32 32 D.S. al Coda",
 	"D.C.alfine": "5 dacs 16 32 32 D.C. al Fine",
 	"D.S.alfine": "5 dacs 16 32 32 D.S. al Fine",
-	fermata: "5 hld 12 7.5 7.5",
+	fermata: "3 hld 12 7.5 7.5",
 	fine: "5 dacs 16 12 12 Fine",
-	invertedfermata: "7 hld 12 8 8",
+	invertedfermata: "4 hld 12 8 8",
 	segno: "5 sgno 22,2 5 5",
 	f: "6 f 12,5 3 4",
 	ff: "6 ff 12,5 8 5",
@@ -560,10 +560,10 @@ var decos = {
 	pppp: "6 pppp 12,5 14 17",
 	pralltriller: "3 umrd 6,5 4 6",
 	sfz: "6 sfz 12,5 9 9",
-	ped: "6 ped 9 6 10",
-	"ped-up": "6 pedoff 9 4 4",
-	"ped(": "7 lped 14 1 1",
-	"ped)": "7 lped 14 1 1",
+	ped: "6 ped 10 4 10",
+	"ped-up": "6 pedoff 10 4 4",
+	"ped(": "6 lped 12,2 1 1",
+	"ped)": "6 lped 12,2 0 2",
 	"crescendo(": "6 cresc 15,2 0 0",
 	"crescendo)": "6 cresc 15,2 0 0",
 	"<(": "6 cresc 15,2 0 0",
@@ -600,9 +600,9 @@ var decos = {
 	sacc3: "3 sacc3 6,5 4 4",
 	sacc1: "3 sacc1 6,4 4 4",
 	courtesy: "43 0 0 0 0",
-	"cacc-1": "3 cacc-1 0 0 0",
-	cacc3: "3 cacc3 0 0 0",
-	cacc1: "3 cacc1 0 0 0",
+	"cacc-1": "3 cacc-1 0 16 0",
+	cacc3: "3 cacc3 0 16 0",
+	cacc1: "3 cacc1 0 16 0",
 	"tie(": "44 0 0 0 0",
 	"tie)": "44 0 0 0 0",
 	fg: "45 0 0 0 0"},
@@ -614,13 +614,13 @@ var decos = {
 		d_arp		// 2 - arpeggio
 	],
 	f_note = [
-		null, null, null, null,
+		null, null, null,
+		d_upstaff,	// 3 - tied to note
 		d_upstaff	// 4 (below the staff)
 	],
 	f_staff = [
 		null, null, null,
-		d_upstaff,	// 3 - tied to note
-		null,
+		null, null,
 		d_upstaff,	// 5 (above the staff)
 		d_upstaff,	// 6 - tied to staff (dynamic marks)
 		d_upstaff	// 7 (below the staff)
@@ -876,6 +876,8 @@ function d_trill(de) {
 	// in the cases "T!trill(!" and "!pp!!<(!"
 	// (side effect on x)
 	function sh_st() {
+		if (dd.name == "ped)")
+			return
 	    var	de3,
 		de2 = de.start,			// start of the decoration
 		s = de2.s,
@@ -908,7 +910,7 @@ function d_trill(de) {
 	    var	de3,
 		i = de.ix			// index of the current decoration
 
-		while (--i > 0) {
+		while (--i >= 0) {
 			de3 = a_de[i]
 			if (!de3 || de3.s != s2)
 				break
@@ -927,11 +929,15 @@ function d_trill(de) {
 				break
 			}
 		}
+		if (dd.name == 'ped)')		// if pedal up
+			w -= 15
 	} //sh_en()
 
 	// d_trill()
+//--fixme:conflict with sh_st?
+//-- what if no 'x' change?
 	if (de2) {			// same height
-		x = de2.s.x + de.dd.wl + 2
+//		x = de2.s.x + de.dd.wl + 2
 		de2.val -= de2.dd.wr
 		if (de2.val < 8)
 			de2.val = 8
@@ -1038,6 +1044,9 @@ function d_upstaff(de) {
 		de.x = x
 		de.y = y
 		return
+	case "pedoff":
+		de.x = x -= 16
+		break
 	}
 
 	if (s.nhd)
@@ -1350,15 +1359,6 @@ function deco_cnv(s, prev) {
 				continue
 			}
 			break
-		case 3:
-			if (fg && dd.glyph == "fng") { // move the fingers out of staves
-				for (i = 0; i <= 5; i++) {
-					decos[i.toString()] = "5 fng 5,5 3 3 " + i
-					if (dd_tb[i.toString()])
-						dd_tb[i.toString()].func = 5
-				}
-			}
-			break
 		case 4:			// below the staff
 		case 5:			// above the staff
 			i = nm.match(/1?[85]([vm])([ab])([()])/)
@@ -1501,10 +1501,9 @@ function deco_cnv(s, prev) {
 				error(1, s, errs.must_note, nm)
 				continue
 			}
-			j = curvoice.acc[s.notes[0].pit + 19]
-			if (s.notes[0].acc || !j)
+			if (s.notes[0].acc)
 				continue
-			court = 1			// defer
+			court = curvoice.acc[s.notes[0].pit + 19] || 3	// defer
 			break
 		case 44:		// cross-voice ties
 			if (s.type != C.NOTE) {
@@ -1538,7 +1537,7 @@ function deco_cnv(s, prev) {
 	}
 	// handle the possible courtesy accidental
 	if (court) {
-		a_dcn.push("cacc" + j)
+		a_dcn.push("cacc" + court)
 		dh_cnv(s, s.notes[0])
 	}
 }
@@ -2436,7 +2435,7 @@ function draw_deco_staff() {
 			continue
 		w = de.val || 10
 		de.y = y_get(de.st, 0, de.x, w)
-			- (dd.dd_st && cfmt.pedline ? 10 : dd.h)
+			- (dd.dd_st && cfmt.pedline ? 4 : dd.h)
 		y_set(de.st, 0, de.x, w, de.y)	// (no descent)
 	}
 
@@ -5030,6 +5029,9 @@ function draw_slurs(s, last) {
 		}
 
 		// set the slur position
+	    if (sl.slr)					// if a slur with repeat
+		sl.ty = sl.slr.ty
+	    else
 		switch (sl.ty & 0x07) {
 		case C.SL_ABOVE: dir = 1; break
 		case C.SL_BELOW: dir = -1; break
@@ -5864,8 +5866,6 @@ function draw_sym_near() {
 		}
 	}
 
-	draw_deco_note()
-
 	for (v = 0; v < voice_tb.length; v++) {
 		p_voice = voice_tb[v];
 		s = p_voice.sym
@@ -5906,6 +5906,8 @@ function draw_sym_near() {
 
 	if (cfmt.measurenb >= 0)
 		draw_measnb();
+
+	draw_deco_note()		// out of the staff
 
 	/* if any lyric, draw them now as unscaled */
 	set_dscale(-1)
@@ -6135,7 +6137,7 @@ function draw_systems(indent) {
 		thb = ""
 
 	/* -- set the bottom and height of the measure bars -- */
-	function bar_set() {
+	function bar_set(tim) {
 	    var	st, sc, i, j, l, stlines, b, hlmap,
 		dy = 0
 
@@ -6198,6 +6200,8 @@ function draw_systems(indent) {
 			return
 		while (--i >= 0) {
 			b = ba[i]
+			if (b[0].time != tim)
+				break
 			st = b[0].st
 			if (b[1] > bar_bot[st])
 				b[1] = bar_bot[st]
@@ -6205,8 +6209,6 @@ function draw_systems(indent) {
 				b[2] = bar_height[st]
 			if (b[3] < bar_ng[st])
 				b[3] = bar_ng[st]
-			if (b[0].seqst)		// end of time sequence
-				break
 		}
 	} // bar_set()
 
@@ -6283,7 +6285,7 @@ function draw_systems(indent) {
 
 	// draw a measure bar
 	function draw_bar(s, bot, h, ng) {
-	    var	i, s2, yb, w,
+	    var	i, s2, yb, w, f,
 		bar_type = s.bar_type,
 		st = s.st,
 		p_staff = staff_tb[st],
@@ -6350,6 +6352,26 @@ function draw_systems(indent) {
 //			case "[":
 //			case "]":
 				x -= 3;
+				if (cfmt.barwings
+				 && (bar_type[0] == ':' || bar_type.slice(-1) == ':')
+				 && (!st || (cur_sy.staves[st - 1].flags & STOP_BAR)
+				  || st == cur_sy.nstaff
+				  || (cur_sy.staves[st].flags & STOP_BAR))) {
+					f = (!st || (cur_sy.staves[st - 1].flags
+								& STOP_BAR))
+							? 0 : 2	// no top if 2
+					f |= (st == cur_sy.nstaff
+						  || (cur_sy.staves[st].flags
+								& STOP_BAR))
+							? 0 : 4	// no bottom if 4
+					if (bar_type[i] == ']')
+						out_wings(x + 3, bot + h + 2.5,
+								h + 3, f + 1)
+					else
+						out_wings(x, bot + h + 2.5,
+								 h + 3, f)
+					break
+				}
 				if (s.color)
 					out_XYAB('<path class="bthW" d="MX YvF"/>\n',
 						x + 1.5, bot, -h)
@@ -6473,7 +6495,7 @@ function draw_systems(indent) {
 		stl[st] = cur_sy.st_print[st]		// staff at start of line
 		xstaff[st] = !stl[st] ? -1 : 0;
 	}
-	bar_set();
+	bar_set(0)
 	draw_lstaff(0)
 	for (s = tsfirst; s; s = s.ts_next) {
 		switch (s.type) {
@@ -6506,7 +6528,7 @@ function draw_systems(indent) {
 				xstaff[st] = sy.st_print[st] ? x2 : -1
 			}
 			cur_sy = sy;
-			bar_set()
+			bar_set(s.time)
 			continue
 		case C.BAR:		// display the bars after the staves
 			if (s.invis || !s.bar_type
@@ -6687,6 +6709,7 @@ Abc.prototype.draw_symbols = function(p_voice) {
 		case C.METER:
 			p_voice.meter = s
 			if (s.second
+			 || !gene.st_print[st]
 			 || !staff_tb[s.st].topbar)
 				break
 			set_color();
@@ -6698,6 +6721,7 @@ Abc.prototype.draw_symbols = function(p_voice) {
 		case C.KEY:
 			p_voice.ckey = s
 			if (s.second
+			 || !gene.st_print[st]
 			 || !staff_tb[s.st].topbar)
 				break
 			set_color();
@@ -7441,7 +7465,7 @@ AADRlyIXAAAAAOPSSjM=\
 ") format("truetype")'
 // abc2svg - format.js - formatting functions
 //
-// Copyright (C) 2014-2025 Jean-Francois Moine
+// Copyright (C) 2014-2026 Jean-François Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -7718,7 +7742,7 @@ function param_set_font(xxxfont, p) {
 		font.src = p.slice(0, n + 1)
 		font.fid = abc2svg.font_tb.length
 		abc2svg.font_tb.push(font)
-		font.name = 'ft' + font.fid
+		font.name = font.src.match(/(\w+)\.\w+\)$/)[1]
 		p = p.replace(font.src, '')
 	}
 
@@ -8026,6 +8050,7 @@ Abc.prototype.set_format = function(cmd, param) {
 			"* * " + (get_bool(param) ? "box" : "nobox"))
 		break
 	case "altchord":
+	case "barwings":
 	case "bstemdown":
 	case "breakoneoln":
 	case "cancelkey":
@@ -8053,13 +8078,13 @@ Abc.prototype.set_format = function(cmd, param) {
 		param = ":: " + param
 		// fall thru
 	case "bardef":			// %%bardef oldbar newbar
-		v = param.split(/\s+/)
-		if (v.length != 2) {
+		v = /([^\s]+)\s*(.+)/.exec(param)
+		if (!v) {
 			syntax(1, errs.bad_val, "%%bardef")
 		} else {
 			if (parse.ufmt)
-				cfmt.bardef = Object.create(cfmt.bardef)	// new object
-			cfmt.bardef[v[0]] = v[1]
+				cfmt.bardef = Object.create(cfmt.bardef)
+			cfmt.bardef[v[1]] = v[2]
 		}
 		break
 	case "chordalias":
@@ -8756,7 +8781,8 @@ function tosvg(in_fname,		// file name
 		init_tune()
 		img.chg = true;
 		set_page();
-		if (cfmt.show_source) {
+		if (cfmt.show_source
+		 && user.img_out) {
 			user.img_out("</div>")
 			if (cfmt.show_source[0][0] == 'a')
 				user.img_out(sav.src)
@@ -8974,6 +9000,8 @@ function tosvg(in_fname,		// file name
 			}
 			switch (a[1]) {
 			case "show_source":
+				if (!user.img_out)
+					continue
 				b = uncomment(a[2])
 				switch (b[0]) {
 				case '*':
@@ -9134,7 +9162,8 @@ function tosvg(in_fname,		// file name
 			sav.maps = clone(maps, 1);
 			sav.mac = clone(mac);
 			sav.maci = clone(maci);
-			if (cfmt.show_source) {
+			if (cfmt.show_source
+			 && user.img_out) {
 				bol -= 2
 				set_src(cfmt.show_source)
 				if (cfmt.show_source[0][0] == 'b')
@@ -11003,8 +11032,8 @@ function set_nl(s) {			// s = start of line
 					s.space = 0
 				}
 				delete s2.part
+				s2.bar_type = "|"
 			}
-			s2.bar_type = "||"
 		} // eol_bar()
 
 		// check if there is a left repeat bar at start of the new line
@@ -11876,7 +11905,7 @@ function mrest_expand() {
 			delete s4.soln
 			delete s4.a_gch
 			delete s4.part
-			lkvsym(s4, s.next)	// before symbol after mrest
+			lkvsym(s4, s2.next)	// after last bar
 			s4.time = tim
 
 			while (s3 && !s3.dur && s3.time == tim)
@@ -12645,7 +12674,7 @@ function set_rest_offset() {
 					d = s.next.y
 			else if (s.prev && s.prev.type == C.REST)
 				d = s.prev.y
-			if (s.multi > 0) {
+			if (s.stem > 0 || s.multi > 0) {
 				if (d >= 12)
 					v_s.d = d - s.y
 			} else {
@@ -12988,6 +13017,12 @@ function check_end_bar() {
 	while (s.ts_next)
 		s = s.ts_next
 	if (s.type != C.BAR) {
+		for (s2 = s.ts_prev; s2 && s2.time == s.time; s2 = s2.ts_prev) {
+			if (s2.bar_type)	// don't add a bar if "bar block*"
+				return
+			if (s2.type != C.BLOCK)
+				break
+		}
 		s2 = _bar(s)
 		s2.ts_prev = s
 
@@ -13034,6 +13069,14 @@ function set_words(p_voice) {
 			start_flag = true
 			break
 		case C.BAR:
+			if (s.text) {
+				res = s.fmt.bardef[s.bar_type + s.text]
+				if (res) {
+					res = /([|:[\]]+)(.*)/.exec(res)
+					s.bar_type = res[1]
+					s.text = res[2]
+				}
+			}
 			res = s.fmt.bardef[s.bar_type]
 			if (res)
 				s.bar_type = res
@@ -14209,10 +14252,9 @@ Abc.prototype.block_gen = function(s) {
 		blkdiv = 2		// start the next SVG in a new page
 		break
 	case "sep":
-		set_page();
 		vskip(s.sk1);
 		output += '<path class="stroke"\n\td="M';
-		out_sxsy((img.width -s.l) / 2 - img.lm, ' ', 0)
+		out_sxsy((get_lwidth() - s.l) / 2, ' ', 0)
 		output += 'h' + s.l.toFixed(1) + '"/>\n';
 		vskip(s.sk2);
 		break
@@ -14721,6 +14763,7 @@ Abc.prototype.output_music = function() {
 			draw_sym_near();		// delayed output
 			line_height = set_staff();
 		    if (line_height) {			// if some music
+			glovar.music_h = line_height + posy	// (for tablature)
 			draw_systems(indent);
 			draw_all_sym();
 			delayed_update();
@@ -16039,7 +16082,7 @@ function adjust_dur(s) {
 
 /* -- parse a bar -- */
 function new_bar() {
-	var	s2, c, bar_type,
+	var	s2, c, bar_type, i,
 		line = parse.line,
 		s = {
 			type: C.BAR,
@@ -16141,6 +16184,11 @@ function new_bar() {
 			delete s.text
 		}
 		curvoice.tie_s_rep = null	// no tie anymore on new variant
+		i = curvoice.sls.length
+		while (--i >= 0) {		// remove the slurs with repeat
+			if (!curvoice.sls[i].rep)
+				curvoice.sls.splice(i, 1)
+		}
 	}
 
 	// handle the accidentals (ties and repeat)
@@ -16152,6 +16200,10 @@ function new_bar() {
 				curvoice.acc_tie_rep = curvoice.acc_tie.slice()
 			else if (curvoice.acc_tie_rep)
 				curvoice.acc_tie_rep = null
+			for (i = 0; i < curvoice.sls.length; i++) {
+				if (!curvoice.sls[i].rep)
+					curvoice.sls[i].rep = 1
+			}
 		} else {
 			curvoice.tie_s = curvoice.tie_s_rep
 			if (curvoice.acc_tie_rep)
@@ -16647,7 +16699,15 @@ function slur_add(s, nt) {		// nt = note if slur ending on note
 		// the slur must not start and stop on a same symbol
 		if (sl.ss == s)
 			continue
-		curvoice.sls.splice(i, 1)
+
+		// if there was a repeat (|: or [1), keep the slur in the voice
+		if (sl.rep) {
+			if (sl.rep >= 10)
+				break
+			sl.rep = 10		// normal end
+		} else {
+			curvoice.sls.splice(i, 1)
+		}
 		sl.se = s			// ending symbol
 		if (nt)
 			sl.nte = nt
@@ -16663,17 +16723,18 @@ function slur_add(s, nt) {		// nt = note if slur ending on note
 	}
 
 	// the lack of a starting slur may be due to a repeat
+    if (sl && sl.rep)					// if repeat
 	for (s2 = s.prev; s2; s2 = s2.prev) {
 		if (s2.type == C.BAR
-		 && s2.bar_type[0] == ':'
-		 && s2.text) {
+		 && (s2.bar_type[0] == ':'
+		  || s2.text)) {
 			if (!s2.sls)
 				s2.sls = [];
 			s2.sls.push({
-//fixme: should go back to the bar "|1" and find the slur type...
 				ty: C.SL_AUTO,
 				ss: s2,
-				se: s
+				se: s,
+				slr: sl		// (for the slur direction)
 			})
 			if (nt)
 				s2.sls[s2.sls.length - 1].nte = nt
@@ -16871,12 +16932,10 @@ Abc.prototype.new_note = function(grace, sls) {
 				pit: 18,
 				dur: s.dur
 			}]
+			s.nmeas = 0
 		} else {
 			glovar.mrest_p = true
-			if (par_sy.voices.length == 1) {
-				s.tacet = curvoice.tacet
-				delete s.invis	// show the 'H' when 'Xn'
-			}
+			s.tacet = curvoice.tacet
 		}
 		break
 	case 'y':
@@ -17861,7 +17920,7 @@ function parse_music_line() {
 }
 // abc2svg - subs.js - text output
 //
-// Copyright (C) 2014-2025 Jean-Francois Moine
+// Copyright (C) 2014-2026 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -18619,8 +18678,6 @@ Abc.prototype.tunhd = function() {
     var	i, j, area, composer, origin, rhythm, down1, down2, p,
 		lwidth = get_lwidth()
 
-	vskip(cfmt.topspace)
-
 	/* titles */
 	if (info.T
 	 && cfmt.writefields.indexOf('T') >= 0) {
@@ -18727,7 +18784,7 @@ function write_heading() {
 } // write_heading()
 // abc2svg - svg.js - svg functions
 //
-// Copyright (C) 2014-2025 Jean-Francois Moine
+// Copyright (C) 2014-2026 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -18850,13 +18907,13 @@ var tgls = {
   flu5: {x:-.3, y:12.5, c:"\ue248"},
   fld5: {x:-.3, y:-14, c:"\ue249"},
  "acc-1": {x:-1, y:0, c:"\ue260"},		// flat
- "cacc-1": {x:-18, y:0, c:"\ue26a\ue260\ue26b"}, // courtesy flat (note deco)
+ "cacc-1": {x:0, y:0, c:"\ue26a\ue260\ue26b"}, // courtesy flat (note deco)
  "sacc-1": {x:-1, y:0, sc:.7, c:"\ue260"},	// small flat (editorial)
   acc3: {x:-1, y:0, c:"\ue261"},		// natural
- "cacc3": {x:-18, y:0, c:"\ue26a\ue261\ue26b"},	// courtesy natural (note deco)
+ "cacc3": {x:0, y:0, c:"\ue26a\ue261\ue26b"},	// courtesy natural (note deco)
   sacc3: {x:-1, y:0, sc:.7, c:"\ue261"},	// small natural (editorial)
   acc1: {x:-2, y:0, c:"\ue262"},		// sharp
- "cacc1": {x:-18, y:0, c:"\ue26a\ue262\ue26b"},	// courtesy sharp (note deco)
+ "cacc1": {x:0, y:0, c:"\ue26a\ue262\ue26b"},	// courtesy sharp (note deco)
   sacc1: {x:-2, y:0, sc: .7, c:"\ue262"},	// small sharp (editorial)
   acc2: {x:-3, y:0, c:"\ue263"},	// double sharp
  "acc-2": {x:-3, y:0, c:"\ue264"},	// double flat
@@ -18910,8 +18967,8 @@ var tgls = {
   roll: {x:0, y:0, c:"\ue618"},
   thumb: {x:-2, y:-2, c:"\ue624"},
   snap: {x:-2, y:-2, c:"\ue630"},
-  ped: {x:-10, y:0, c:"\ue650"},
-  pedoff: {x:-5, y:0, c:"\ue655"},
+  ped: {x:-10, y:-2, c:"\ue650"},
+  pedoff: {x:-5, y:-2, c:"\ue655"},
  "mtro.": {x:0, y:0, c:"\ue910"},	// tempus perfectum prolatione perfecta
   mtro:   {x:0, y:0, c:"\ue911"},		// tempus perfectum
  "mtro|": {x:0, y:0, c:"\ue912"},	// tempus perfectum (twice as fast)
@@ -19406,6 +19463,8 @@ function xygl(x, y, gl) {
 			if (tgl.sc) {
 				out_XYAB('<text transform="translate(X,Y) scale(A)">B</text>\n',
 					x, y, tgl.sc, tgl.c);
+			} else if (tgl.c.length > 1) {		// many glyphs
+				out_XYAB('<text x="X" y="Y">A</text>\n', x, y, tgl.c)
 			} else {
 //				out_XYAB('<text x="X" y="Y">A</text>\n', x, y, tgl.c)
 				gla[0].push(sx(x))
@@ -19442,15 +19501,37 @@ function out_brace(x, y, h) {
 			')">' + tgls.brace.c + '</text>\n'
 }
 
+// staff system bracket or wings for repeat bars
+// 'f'= bit0 = 0 for [ or 1 for ]
+//	bit1 = 1 for no top wing
+//	bit2 = 1 for no bottom wing
+function out_wings(x, y, h, f) {
+	x += posx
+	y = posy - y - 1
+	h += 2
+	output += '<path d="m' + x.toFixed(1) + ' ' + y.toFixed(1)
+	if (f & 1) {
+		output += (f & 2)
+			? 'h-3\n v'
+			: 'c-10.5 1 -12 -4.5 -12 -3.5c0 1 3.5 5.5 9 5.5\n v'
+		output += h.toFixed(1)
+			+ ((f & 4)
+			? 'h3"/>\n'
+			: 'c-5 0 -9 4.5 -8.5 5.5c0 1 1.5 -4.5 12 -3.5"/>\n')
+	} else {
+		output += (f & 2)
+			? 'h3\n v'
+			: 'c10.5 1 12 -4.5 12 -3.5c0 1 -3.5 5.5 -9 5.5\n v'
+		output += h.toFixed(1)
+			+ ((f & 4)
+			? 'h-3"/>\n'
+			: 'c5 0 9 4.5 8.5 5.5c0 1 -1.5 -4.5 -12 -3.5"/>\n')
+	}
+} // out_wings()
+
 // staff system bracket
 function out_bracket(x, y, h) {
-	x += posx - 5;
-	y = posy - y - 3;
-	h += 2;
-	output += '<path d="m' + x.toFixed(1) + ' ' + y.toFixed(1) + '\n\
-	c10.5 1 12 -4.5 12 -3.5c0 1 -3.5 5.5 -8.5 5.5\n\
-	v' + h.toFixed(1) + '\n\
-	c5 0 8.5 4.5 8.5 5.5c0 1 -1.5 -4.5 -12 -3.5"/>\n'
+	out_wings(x - 5, y + 2, h, 0)
 }
 // hyphen
 function out_hyph(x, y, w) {
@@ -20152,7 +20233,7 @@ function blk_flush() {
 Abc.prototype.blk_flush = blk_flush
 // abc2svg - tune.js - tune generation
 //
-// Copyright (C) 2014-2025 Jean-Francois Moine
+// Copyright (C) 2014-2026 Jean-Francois Moine
 //
 // This file is part of abc2svg-core.
 //
@@ -20642,6 +20723,8 @@ Abc.prototype.voice_adj = function (sys_chg) {
 				sl = p_voice.sls.shift()
 				if (!sl)
 					break
+				if (sl.rep)		// if slur with repeat
+					continue
 				s = sl.ss
 //					error(1, s, "Lack of ending slur(s)")
 					if (!s.sls)
@@ -20702,6 +20785,10 @@ Abc.prototype.voice_adj = function (sys_chg) {
 					break
 				}
 				continue
+			case C.MREST:
+				if (voice_tb.length == 1 && s.tacet && s.invis)
+					s.invis = 0	// show the |---|
+				break
 			case C.NOTE:
 				if (s.feathered_beam)
 					set_feathered_beam(s)
@@ -21263,7 +21350,7 @@ Abc.prototype.do_pscom = function(text) {
 		}
 		if (param.slice(-1) == 'f') {
 			s.stbrk_forced = true
-			param = param.replace(/\sf$/, '')
+			param = param.replace(/\s+f$/, '')
 		}
 		if (param) {
 			val = get_unit(param)
@@ -21272,8 +21359,11 @@ Abc.prototype.do_pscom = function(text) {
 				return
 			}
 			s.xmx = val
-		} else {
-			s.xmx = 14
+		} else {		// no width, change to %%staves without synchro.
+			s.type = C.STAVES
+			s.sy = clone(par_sy, 2)		// clone the staves and voices
+			par_sy.next = s.sy
+			par_sy = s.sy
 		}
 		sym_link(s)
 		return
@@ -21624,7 +21714,7 @@ function fill_mr_ba(p_v) {
 		frm: 1, //true			// full measure rest
 		dur: dur,
 		dur_orig: dur,
-		nmes: dur / p_v.wmeasure,
+		nmeas: dur / p_v.wmeasure,
 		notes: [{
 			pit: 18,
 			dur: dur
@@ -21685,7 +21775,7 @@ function get_staves(cmd, parm) {
 		if (p_voice.time > maxtime)
 			maxtime = p_voice.time
 	}
-	if (!maxtime) {				// if first %%staves
+	if (staves_found < 0) {				// if first %%staves
 		par_sy.staves = []
 		par_sy.voices = []
 	} else {
@@ -23844,6 +23934,7 @@ abc2svg.modules = {
 	soloffs: {},
 	sth: {},
 	strtab: {},
+	tablature: { fn: 'tblt' },
 	temperament: { fn: 'temper' },
 	temponame: { fn: 'tempo' },
 	tropt: {},
@@ -23911,4 +24002,4 @@ abc2svg.modules = {
 		return this.nreq == nreq_i
 	}
 } // modules
-abc2svg.version="v1.22.35";abc2svg.vdate="2026-01-22"
+abc2svg.version="v1.23.1";abc2svg.vdate="2026-05-05"

@@ -1,4 +1,4 @@
-//~ xmlplay, Revision: 181, Copyright (C) 2016-2025: Willem Vree, contributions Stéphane David.
+//~ xmlplay, Revision: 182, Copyright (C) 2016-2025: Willem Vree, contributions Stéphane David.
 //~ This program is free software; you can redistribute it and/or modify it under the terms of the
 //~ GNU General Public License as published by the Free Software Foundation; either version 2 of
 //~ the License, or (at your option) any later version.
@@ -7,7 +7,7 @@
 //~ See the GNU General Public License for more details. <http://www.gnu.org/licenses/gpl.html>.
 
 'use strict'
-var xmlplay_VERSION = 181;
+var xmlplay_VERSION = 182;
 import * as mLib from './xmlplay_lib.js';
 import * as sLib from './xmlplay_syn.js';
 
@@ -24,7 +24,8 @@ import * as sLib from './xmlplay_syn.js';
         transMap: {},   // stem nummer -> transpositie
         burak: 0,       // fast playback of appogiatura and tremolo
         nosm: 0,        // no smooth scrolling
-        noDash: 0       // hide dotted line
+        noDash: 0,      // hide dotted line
+        arpmaxdur: 36   // max duration of arpeggio in ABC ticks (36 == 75 msec bij tempo 75)
     }
     var gAbcSave, gAbcTxt, scoreFnm;
     var isPlaying = 0, hasSmooth;
@@ -298,6 +299,7 @@ function doParms (p_html, p_url, p_mod) {
         }
     }
     if (p.deb != undefined) debug = 1;
+    if (p.arpmaxdur != undefined) opt.arpmaxdur = p.arpmaxdur;
 }
 
 async function parsePreload () {  // => getPreload => doParms => verder
@@ -323,6 +325,7 @@ async function parsePreload () {  // => getPreload => doParms => verder
             else if (p == 'deb') p_url.deb = 1;
             else if (p == 'rbm') p_url.rbm = 1;
             else if (p == 'burak') { p_url.rbm = 1; p_url.burak = 1; }
+            else if (r = p.match (/arp=([\d]+)/)) p_url.arpmaxdur = +r [1]; // max duration of arpeggio
             else preload = p;
         }
     };
