@@ -66,11 +66,10 @@ function xmlplay(abc2svg) {
 const schuifregelaar = `<div class="schuif">
     <div class="rij">
         <div class="vol">
-            <label>Vol_XXX</label>
+            <label>XXX</label>
             <input type="range" list="markers" min="0" max="127" step="1">
             <div>0</div>
         </div>
-        <div>&nbsp;</div>
         <div class="pan">
             <label>Pan_XXX</label>
             <input type="range" list="markers" min="0" max="127" step="1">
@@ -180,7 +179,8 @@ function dolayout (abctxt) {
     ss.replaceChildren ();  // verwijder de oude schuifregelaars
     for (var i = 0; i < midiVol.length; ++i) {
         var stf = vce2stf [i], nm = stf2name [stf];
-        var shtml = schuifregelaar.replaceAll ('XXX', i + '<br>' + (nm ? nm : stf));
+        var lbl = nm || ('Voice ' + (i + 1));
+        var shtml = schuifregelaar.replaceAll ('XXX', lbl);
         ss.insertAdjacentHTML ('beforeend', shtml);
     }
     var vols = Array.from (document.querySelectorAll ('.vol input'));

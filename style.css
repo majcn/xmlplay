@@ -1,89 +1,363 @@
-.icon-expand {
-  background-image: url(node_modules/@material-design-icons/svg/filled/expand_circle_down.svg);
-  background-repeat: no-repeat;
-  background-position: center;
-  width: 24px;
-}
-
-.icon-play {
-  background-image: url(node_modules/@material-design-icons/svg/filled/play_arrow.svg);
-  background-repeat: no-repeat;
-  background-position: center;
-  width: 24px;
-}
-
+/* Play/stop use mask so the blue circle isn't colour-inverted */
+.icon-play,
 .icon-stop {
-  background-image: url(node_modules/@material-design-icons/svg/filled/stop.svg);
-  background-repeat: no-repeat;
-  background-position: center;
-  width: 24px;
+  background-image: none;
 }
 
-.linethrough {
-  text-decoration: line-through;
-}
-
-.strikethrough {
-  position: relative;
-}
-
-.strikethrough:before {
-  position: absolute;
+#play::before {
   content: '';
-  left: 0;
-  top: 50%;
-  right: 0;
-  border-top: 1px solid;
-  border-color: inherit;
-  -webkit-transform: rotate(-15deg);
-  -moz-transform: rotate(-15deg);
-  -ms-transform: rotate(-15deg);
-  -o-transform: rotate(-15deg);
-  transform: rotate(-15deg);
+  display: block;
+  width: 22px;
+  height: 22px;
+  background-color: white;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 22px;
+  mask-size: 22px;
 }
 
+#play.icon-play::before {
+  -webkit-mask-image: url(node_modules/@material-design-icons/svg/filled/play_arrow.svg);
+  mask-image: url(node_modules/@material-design-icons/svg/filled/play_arrow.svg);
+}
+
+#play.icon-stop::before {
+  -webkit-mask-image: url(node_modules/@material-design-icons/svg/filled/stop.svg);
+  mask-image: url(node_modules/@material-design-icons/svg/filled/stop.svg);
+}
+
+/* ===== Error log ===== */
 #err {
   display: none;
 }
 
-#tempo {
-  width: auto;
-  writing-mode: horizontal-tb;
+/* ===== Container ===== */
+#btns {
+  position: fixed !important;
+  right: 12px;
+  top: 12px;
+  z-index: 100;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-#voices div,
-#play {
-  padding-left: 0.5em;
-  padding-right: 0.5em;
-}
-
-#voices,
+/* ===== Main bar ===== */
 #mbar {
   display: flex;
-}
-
-#voices div:hover,
-#panel-button,
-#play:hover,
-#playbk:hover {
-  cursor: pointer;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(14, 16, 26, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 13px;
+  transition: border-radius 0.15s, border-bottom-color 0.15s, box-shadow 0.15s;
 }
 
 #mbar:hover {
   cursor: default;
 }
 
-/* Mobile: Position control bar below title instead of overlapping */
+/* When panel is open: flatten bottom of mbar to meet controls flush */
+#btns:has(#controls:not(.hidden)) #mbar {
+  border-radius: 12px 12px 0 0;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+/* ===== Play/Stop button ===== */
+#play {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 50%;
+  background: #3b7ef8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+#play:hover {
+  background: #5a92ff;
+  transform: scale(1.06);
+}
+
+/* ===== Voice mute buttons ===== */
+#voices {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.voice-button {
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #dde4f0;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.voice-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.voice-button.muted {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+/* ===== Compact tempo ===== */
+#tempo-compact {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.tempo-bump {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.85);
+  user-select: none;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.tempo-bump:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+#tempo-value {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  min-width: 56px;
+  text-align: center;
+}
+
+/* ===== Toggle — always pushed right ===== */
+#toggle-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  cursor: pointer;
+  background-color: rgba(255, 255, 255, 0.45);
+  -webkit-mask-image: url(node_modules/@material-design-icons/svg/filled/expand_more.svg);
+  mask-image: url(node_modules/@material-design-icons/svg/filled/expand_more.svg);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 22px;
+  mask-size: 22px;
+  transition: background-color 0.15s, transform 0.2s;
+}
+
+#toggle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+#toggle-btn.open {
+  transform: rotate(180deg);
+}
+
+/* ===== Old expand button — hidden, required in DOM by xmlplay.js ===== */
+#panel-button {
+  display: none;
+}
+
+/* ===== Expandable controls panel ===== */
+#controls {
+  background: rgba(14, 16, 26, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 0 0 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-top: none;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+#controls.hidden {
+  display: none;
+}
+
+/* ===== Voice volume sliders ===== */
+#voice-vols {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voice-vol-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-vol-label {
+  color: rgba(190, 205, 230, 0.7);
+  font-size: 12px;
+  white-space: nowrap;
+  min-width: 76px;
+}
+
+.voice-vol {
+  writing-mode: horizontal-tb !important;
+  flex: 1;
+  height: auto;
+  accent-color: #3b7ef8;
+  cursor: pointer;
+}
+
+.voice-vol-pct {
+  color: rgba(190, 205, 230, 0.55);
+  font-size: 12px;
+  width: 54px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* ===== Full tempo slider (expanded panel) ===== */
+.tempo-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#tempo {
+  writing-mode: horizontal-tb;
+  flex: 1;
+  accent-color: #3b7ef8;
+  cursor: pointer;
+}
+
+/* ===== Error toast ===== */
+#error-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(40, 14, 14, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  color: #ffb3b3;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  max-width: 90vw;
+}
+
+#error-toast.hidden {
+  display: none;
+}
+
+#error-close {
+  cursor: pointer;
+  color: rgba(255, 180, 180, 0.6);
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+#error-close:hover {
+  color: rgba(255, 180, 180, 1);
+}
+
+/* ===== Audio schuivers — hidden, kept in DOM for audio ===== */
+#menu {
+  display: none !important;
+}
+
+/* ===== Big play overlay button — hidden, audio unlock handled by #play ===== */
+#playbk {
+  display: none !important;
+}
+
+/* ===== Mobile ===== */
 @media (max-width: 768px) {
   #btns {
     position: relative !important;
-    top: auto !important;
-    right: auto !important;
+    top: auto;
+    right: auto;
     display: block;
-    margin-bottom: 10px;
   }
 
   #mbar {
-    justify-content: center;
+    border-radius: 0;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
   }
+
+  #btns:has(#controls:not(.hidden)) #mbar {
+    border-radius: 0;
+  }
+
+  #play {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+  }
+
+  #play::before {
+    width: 26px;
+    height: 26px;
+    -webkit-mask-size: 26px;
+    mask-size: 26px;
+  }
+
+  .tempo-bump {
+    width: 28px;
+    height: 28px;
+  }
+
+  #toggle-btn {
+    width: 44px;
+    height: 44px;
+    -webkit-mask-size: 26px;
+    mask-size: 26px;
+  }
+
+  #controls {
+    border-radius: 0;
+  }
+
 }
+
