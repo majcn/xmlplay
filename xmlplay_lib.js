@@ -31,7 +31,13 @@ var gScale = 1.0;
 var ntsPos = {};    // {abc_char_pos -> nSvg, x, y, w, h}
 var stfPos = [];    // [stfys for each svg]
 var stfHgt = [];    // hoogte van een balk
-var audioCtx, timer1, gAccTime, tmpElm;
+var audioCtx, timer1, gAccTime, tmpElm, lastMarkeerTmp;
+
+function dispatchTempoChange (tmp) {
+    if (tmp === lastMarkeerTmp) return;
+    lastMarkeerTmp = tmp;
+    document.dispatchEvent (new CustomEvent ('xmlplay-markeer', { detail: { tmp } }));
+}
 var rolElm;         // de stippellijn
 var metRects = 0;   // all notes marked with svg-rects
 var putMarkExt;
@@ -72,6 +78,7 @@ function doModel (Abc, abctxt, opt, gTempo=120, debug, mapTab, logerr, putMarkEx
     }
 
     function parseModel (ts_p, voice_tb, music_types) {
+        gTempo = initialTempo;
         function edo53cor (step) {
             var semi = [0, 2, 3, 5, 7, 8, 10];      // toonladder Amin (halve toonschreden)
             var komma = [0, 9, 13, 22, 31, 35, 44]; // idem, maar toonschreden in komma's t.o.v. A
@@ -301,9 +308,12 @@ function doModel (Abc, abctxt, opt, gTempo=120, debug, mapTab, logerr, putMarkEx
         var midiUsed = {};
         nVoices = voice_tb.length;
         gStaves = getStaves (voice_tb);
-        allNotes = parseNotes (ts_p);
-        allNotes.sort ((a, b) => a.t - b.t);
-        midiUsedArr = Object.keys (midiUsed);   // global used in laadNoot
+        var songNotes = parseNotes (ts_p);
+        songNotes.sort ((a, b) => a.t - b.t);
+        var maxT = songNotes.length ? songNotes [songNotes.length - 1].t : 0;
+        allNotesAccum = allNotesAccum.concat (songNotes.map (n => Object.assign ({}, n, {t: n.t + songOffset})));
+        Object.assign (midiUsedAll, midiUsed);
+        songOffset += maxT + BASE_LEN;
     }
 
     if (abctxt.indexOf ('temperamentequal 53') >= 0) edo53 = 1;
@@ -311,6 +321,7 @@ function doModel (Abc, abctxt, opt, gTempo=120, debug, mapTab, logerr, putMarkEx
         metRects = 1;    // wordt gebruikt in mkNtsSeq
         putMarkExt = putMarkExt_p;
     }
+    var allNotesAccum = [], songOffset = 0, midiUsedAll = {}, initialTempo = gTempo;
     var user = {
         'img_out': null, // img_out,
         'errmsg': errmsg,
@@ -321,6 +332,9 @@ function doModel (Abc, abctxt, opt, gTempo=120, debug, mapTab, logerr, putMarkEx
     abc2svg = new Abc (user);
     abc2svg.tosvg ('play', '%%play');   // houdt rekening met transpose= in K: of V:
     abc2svg.tosvg ('abc2svg', abctxt);
+    allNotes = allNotesAccum;
+    allNotes.sort ((a, b) => a.t - b.t);
+    midiUsedArr = Object.keys (midiUsedAll);
     if (errtxt == '') errtxt = 'no error';
     logerr (errtxt.trim ());
     rMarks.forEach (function (mark) {   // verwijder oude markeringen
@@ -427,6 +441,7 @@ function doLayout (Abc, abctxt, opt, abc_elm, fplay, abcElm_p, logerr, addUnlock
                     putMarkLoc (ntsSeq [i]);
                     i += 1
                 }
+                dispatchTempoChange (ntsSeq [iSeq]?.tmp ?? 120);
                 break;
             }
         }
@@ -505,6 +520,7 @@ function mkNtsSeq () {
     }
     if (iSeq == ntsSeq.length) iSeq -= 1;
     putMarkLoc (ntsSeq [iSeq]);
+    dispatchTempoChange (ntsSeq [iSeq]?.tmp ?? 120);
 }
 
 function rolRegel (e, isvg) {   // rol regel isvg tot aan de stippellijn
@@ -618,6 +634,7 @@ function regelOmhoog (inc) {
 
 function markeer () {
     if (!audioCtx) { alert (alrtMsg2); return }
+    dispatchTempoChange (ntsSeq [iSeq]?.tmp ?? 120);
     var t0 = audioCtx.currentTime * 1000;
     var dt = 0, t1, tf;
     var tfac = 60000 / 384;
@@ -650,6 +667,7 @@ function start_markeer (audioCtx_p, ntsel) {
     tmpElm = document.getElementById ('tempo') || { value: 1 };
     audioCtx = audioCtx_p;
     gAccTime = audioCtx.currentTime * 1000; // starttijd in millisecondes
+    lastMarkeerTmp = undefined;
     if (ntsel) {
         var [ib, ie] = ntsel.id.slice (1).split ('_').map (x => parseInt (x));
         var ibmin = 0, dmin = Infinity;

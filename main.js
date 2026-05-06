@@ -3,7 +3,6 @@ import "./style.css";
 
 import abc2svg from "./vendor/abc2svg/abc2svg-bundle.js";
 import xmlplay from "./xmlplay.js";
-import { ntsSeq } from "./xmlplay_lib.js";
 
 import commonAbc from "./common.abc?raw";
 
@@ -11,19 +10,16 @@ const player = xmlplay(abc2svg);
 
 const VOICE_NAMES = ["Prvi glas", "Drugi glas", "Tretji glas", "Cetrti glas"];
 
-function getBaseBpm() {
-  return ntsSeq[0]?.tmp ?? 120;
-}
-
-function updateTempoDisplay() {
-  const bpm = Math.round(getBaseBpm() * parseFloat(document.getElementById("tempo").value));
-  document.getElementById("tempo-value").textContent = bpm + " BPM";
+function updateTempoDisplay(bpm) {
+  const speed = parseFloat(document.getElementById("tempo").value);
+  document.getElementById("tempo-value").textContent = Math.round(bpm * speed) + " BPM";
   const tempoBpm = document.getElementById("tempo-bpm");
-  if (tempoBpm) tempoBpm.textContent = bpm + " BPM";
+  if (tempoBpm) tempoBpm.textContent = Math.round(speed * 100) + "%";
 }
 
 function initTempoBumps() {
   const tempoInput = document.getElementById("tempo");
+  let bpm = 120;
 
   const bump = (delta) => {
     const next = Math.round((parseFloat(tempoInput.value) + delta) * 100) / 100;
@@ -31,9 +27,10 @@ function initTempoBumps() {
     tempoInput.dispatchEvent(new Event("input"));
   };
 
-  tempoInput.addEventListener("input", updateTempoDisplay);
+  tempoInput.addEventListener("input", () => updateTempoDisplay(bpm));
   document.getElementById("tempo-down").addEventListener("click", () => bump(-0.1));
   document.getElementById("tempo-up").addEventListener("click", () => bump(0.1));
+  document.addEventListener("xmlplay-markeer", (e) => { bpm = e.detail.tmp; updateTempoDisplay(bpm); });
 }
 
 function syncVolSlider(i, value) {
@@ -109,7 +106,6 @@ function addVoiceButtons(voices) {
   }
 
   voicesEl.replaceChildren(...btns);
-  updateTempoDisplay();
 }
 
 function initToggleButton() {
